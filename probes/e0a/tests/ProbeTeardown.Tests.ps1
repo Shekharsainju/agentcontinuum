@@ -11,6 +11,7 @@ Describe 'Invoke-ProbeTeardown' {
     Mock -ModuleName ProbeTeardown Remove-LocalUser { }
     Mock -ModuleName ProbeTeardown Remove-Item { }
     Mock -ModuleName ProbeTeardown Remove-ProbeRight { }
+    Mock -ModuleName ProbeTeardown Remove-ProbeProfileInstance { }
     Mock -ModuleName ProbeTeardown Get-ProbeProfileListSid { }
   }
 
@@ -27,17 +28,17 @@ Describe 'Invoke-ProbeTeardown' {
   It 'deletes profiles via CIM, never Remove-Item under C:\Users' {
     Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl' } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
     $r = Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\'
-    Assert-MockCalled -ModuleName ProbeTeardown Invoke-CimMethod -ParameterFilter { $MethodName -eq 'Delete' } -Times 1 -Scope It
+    Assert-MockCalled -ModuleName ProbeTeardown Remove-ProbeProfileInstance -Times 1 -Scope It
     Assert-MockCalled -ModuleName ProbeTeardown Remove-Item -ParameterFilter { $Path -like 'C:\Users\*' } -Times 0 -Scope It
   }
 
   It 'retries a loaded profile 5 times then continues' {
     Mock -ModuleName ProbeTeardown Start-Sleep { }
     Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl' } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
-    Mock -ModuleName ProbeTeardown Invoke-CimMethod { throw 'profile in use' }
+    Mock -ModuleName ProbeTeardown Remove-ProbeProfileInstance { throw 'profile in use' }
     $r = Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\'
     (($r.Steps | Where-Object Name -eq 'DeleteProfiles').Ok) | Should Be $false
-    Assert-MockCalled -ModuleName ProbeTeardown Invoke-CimMethod -Times 5 -Scope It
+    Assert-MockCalled -ModuleName ProbeTeardown Remove-ProbeProfileInstance -Times 5 -Scope It
     (($r.Steps | Where-Object Name -eq 'RemoveAccounts')) | Should Not BeNullOrEmpty
   }
 
