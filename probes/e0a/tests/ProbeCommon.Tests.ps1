@@ -26,6 +26,12 @@ Describe 'Read-Heartbeat' {
     [IO.File]::WriteAllText($f, ($t0.ToString('o') + "`r`n" + $t0.AddSeconds(1).ToString('o') + "`r`n"))
     (Read-Heartbeat $f).Count | Should Be 2
   }
+  It 'counts correctly when the call is wrapped in @()' {
+    $f = "$TestDrive\wrap.txt"
+    Set-Content -LiteralPath $f -Value @($t0.ToString('o'), $t0.AddSeconds(1).ToString('o'), $t0.AddSeconds(2).ToString('o'))
+    @(Read-Heartbeat $f).Count | Should Be 3
+    @(Read-Heartbeat 'TestDrive:\none.txt').Count | Should Be 0
+  }
 }
 Describe 'Get-FreezeVerdict' {  # freeze at t0+10, thaw at t0+16
   $f = $t0.AddSeconds(10); $th = $t0.AddSeconds(16)
