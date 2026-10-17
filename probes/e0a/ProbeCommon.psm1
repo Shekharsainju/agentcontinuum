@@ -167,9 +167,16 @@ function Test-SecretAbsent {
     }
   }
   $hits = New-Object System.Collections.Generic.List[string]
+  $unscanned = New-Object System.Collections.Generic.List[string]
   foreach ($root in $Paths) {
     $rp = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($root)
-    $files = @(Get-ChildItem -LiteralPath $rp -Recurse -Force -File -ErrorAction SilentlyContinue)
+    if (-not (Test-Path -LiteralPath $rp)) { $unscanned.Add($rp); continue }
+    $gciErr = @()
+    $files = @(Get-ChildItem -LiteralPath $rp -Recurse -Force -File -ErrorAction SilentlyContinue -ErrorVariable gciErr)
+    foreach ($e in $gciErr) {
+      $t = if ($e.TargetObject) { [string]$e.TargetObject } else { $rp }
+      $unscanned.Add($t)
+    }
     foreach ($file in $files) {
       try {
         $fs = New-Object IO.FileStream($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
@@ -183,14 +190,18 @@ function Test-SecretAbsent {
           }
         }
         finally { $fs.Dispose() }
-      } catch { continue }
+      } catch { $unscanned.Add($file.FullName); continue }
       $hay = $latin1.GetString($bytes)
       foreach ($nd in $needles) {
         if ($hay.IndexOf($nd.Text, [StringComparison]::Ordinal) -ge 0) { $hits.Add("$($file.FullName) [$($nd.Enc)]") }
       }
     }
   }
-  [pscustomobject]@{ Clean = ($hits.Count -eq 0); Hits = $hits.ToArray() }
+  [pscustomobject]@{
+    Clean     = ($hits.Count -eq 0 -and $unscanned.Count -eq 0)
+    Hits      = $hits.ToArray()
+    Unscanned = $unscanned.ToArray()
+  }
 }
 
 Export-ModuleMember -Function New-ProbePassword, ConvertFrom-ProbeSecureString, Read-Heartbeat,

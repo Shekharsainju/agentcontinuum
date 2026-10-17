@@ -38,4 +38,17 @@ Describe 'Test-SecretAbsent' {
   It 'finds UTF-16 hit' { [IO.File]::WriteAllText("$TestDrive\x.bin",'..s3cret..',[Text.Encoding]::Unicode)
     (Test-SecretAbsent @("$TestDrive") @('s3cret')).Clean | Should Be $false }
   It 'clean when absent' { (Test-SecretAbsent @("$TestDrive\x.bin") @('other')).Clean | Should Be $true }
+  It 'is not clean when a root path does not exist' {
+    $missing = "$TestDrive\no-such-dir"
+    $r = Test-SecretAbsent @($missing) @('other')
+    $r.Clean | Should Be $false
+    ($r.Unscanned -contains $missing) | Should Be $true
+  }
+  It 'is not clean when a file cannot be read (locked)' {
+    $f = "$TestDrive\locked.bin"; [IO.File]::WriteAllText($f, 'zzz')
+    $fs = New-Object IO.FileStream($f, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try { $r = Test-SecretAbsent @($f) @('other') } finally { $fs.Dispose() }
+    $r.Clean | Should Be $false
+    ($r.Unscanned -contains $f) | Should Be $true
+  }
 }
