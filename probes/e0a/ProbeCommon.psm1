@@ -55,8 +55,14 @@ function Read-Heartbeat {
     $fs = New-Object IO.FileStream($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
     try { $sr = New-Object IO.StreamReader($fs); $text = $sr.ReadToEnd() } finally { $fs.Dispose() }
   } catch { return , @() }
+  $parts = $text -split "`r?`n"
+  # A concurrently appended file can be read mid-write; a final line with no trailing newline is
+  # a torn partial write, so drop it and count only complete lines.
+  if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) {
+    if ($parts.Count -le 1) { $parts = @() } else { $parts = $parts[0..($parts.Count - 2)] }
+  }
   $out = New-Object System.Collections.Generic.List[datetime]
-  foreach ($line in ($text -split "`r?`n")) {
+  foreach ($line in $parts) {
     $l = $line.Trim()
     if ($l -eq '') { continue }
     $d = [datetime]::MinValue
