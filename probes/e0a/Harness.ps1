@@ -37,11 +37,25 @@ $selfHandle = [System.Diagnostics.Process]::GetCurrentProcess().Handle
 $result['harness_in_job_before'] = [AcProbe.Native]::IsInJob($selfHandle, [IntPtr]::Zero)
 
 $ChildPath = Join-Path $BinDir 'Child.ps1'
-$Launch = {
-  param($Mode, $ExtraArgs, $Suspended)
-  $cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$ChildPath`" -Mode $Mode $ExtraArgs"
-  [AcProbe.Native]::StartSelf($cmd, [bool]$Suspended, $false)
-}.GetNewClosure()
+if ($Run -eq 'self') {
+  $Launch = {
+    param($Mode, $ExtraArgs, $Suspended)
+    $cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$ChildPath`" -Mode $Mode $ExtraArgs"
+    [AcProbe.Native]::StartSelf($cmd, [bool]$Suspended, $false)
+  }.GetNewClosure()
+}
+else {
+  Import-Module (Join-Path $BinDir 'ProbeSecret.psm1') -Force
+  $agentSecret = Receive-ProbeSecret -PipeName $PipeName
+  $agentUser = 'ac-probe-agent'
+  $Launch = {
+    param($Mode, $ExtraArgs, $Suspended)
+    $cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$ChildPath`" -Mode $Mode $ExtraArgs"
+    $plain = ConvertFrom-ProbeSecureString $agentSecret
+    try { [AcProbe.Native]::StartAsUser($agentUser, '.', $plain, $cmd, [bool]$Suspended) }
+    finally { $plain = $null }
+  }.GetNewClosure()
+}
 
 $Ctx = @{
   Launch     = $Launch
