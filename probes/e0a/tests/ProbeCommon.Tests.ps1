@@ -16,6 +16,16 @@ Describe 'Read-Heartbeat' {
     (Read-Heartbeat (Resolve-Path $f)).Count | Should Be 2
   }
   It 'returns empty for missing file' { (Read-Heartbeat 'TestDrive:\nope.txt').Count | Should Be 0 }
+  It 'ignores a final line with no trailing newline' {
+    $f = "$TestDrive\torn.txt"
+    [IO.File]::WriteAllText($f, ($t0.ToString('o') + "`r`n" + $t0.AddSeconds(1).ToString('o')))
+    (Read-Heartbeat $f).Count | Should Be 1
+  }
+  It 'counts the final line once it is newline-terminated' {
+    $f = "$TestDrive\whole.txt"
+    [IO.File]::WriteAllText($f, ($t0.ToString('o') + "`r`n" + $t0.AddSeconds(1).ToString('o') + "`r`n"))
+    (Read-Heartbeat $f).Count | Should Be 2
+  }
 }
 Describe 'Get-FreezeVerdict' {  # freeze at t0+10, thaw at t0+16
   $f = $t0.AddSeconds(10); $th = $t0.AddSeconds(16)
