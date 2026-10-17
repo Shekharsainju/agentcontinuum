@@ -49,12 +49,12 @@ function Read-Heartbeat {
   [CmdletBinding()]
   param([Parameter(Mandatory, Position = 0)]$Path)
   $p = $PSCmdlet.GetUnresolvedProviderPathFromPSPath([string]$Path)
-  if (-not [IO.File]::Exists($p)) { return , @() }
+  if (-not [IO.File]::Exists($p)) { return @() }
   $text = $null
   try {
     $fs = New-Object IO.FileStream($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
     try { $sr = New-Object IO.StreamReader($fs); $text = $sr.ReadToEnd() } finally { $fs.Dispose() }
-  } catch { return , @() }
+  } catch { return @() }
   $parts = $text -split "`r?`n"
   # A concurrently appended file can be read mid-write; a final line with no trailing newline is
   # a torn partial write, so drop it and count only complete lines.
@@ -69,7 +69,7 @@ function Read-Heartbeat {
     if ([datetime]::TryParseExact($l, 'o', [Globalization.CultureInfo]::InvariantCulture,
         [Globalization.DateTimeStyles]::RoundtripKind, [ref]$d)) { $out.Add($d.ToUniversalTime()) }
   }
-  , $out.ToArray()
+  $out.ToArray()
 }
 
 function Get-FreezeVerdict {
