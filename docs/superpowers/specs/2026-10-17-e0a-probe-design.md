@@ -154,3 +154,7 @@ UTF-8 JSON in a per-invocation folder `C:\ProgramData\ac-probe-results\<yyyyMMdd
 | Handle from `CreateProcessWithLogonW` assignable to own job, nested with Secondary Logon | C2 in runs A and B |
 | Standard account can freeze and terminate its job of agent processes | C3, C4, C5, C6 |
 | Enumerate agent processes and creation times; kill ones not created | C7 |
+
+## Open items
+
+- The real controller's named pipes (the R12 events pipe and any secret handoff) must verify the server's SID before trusting what they receive, not connect by name alone. A local attacker who wins the create race can stand up a pipe of the expected name; name-only trust lets the client accept attacker-chosen bytes. The E0a probe's `Receive-ProbeSecret` connects by name only (acceptable for the probe, where a lost race makes the real server fail `FIRST_PIPE_INSTANCE` and never serve the secret), but the production controller must check the server principal.
