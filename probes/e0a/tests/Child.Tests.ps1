@@ -1,16 +1,19 @@
 $child = "$PSScriptRoot\..\Child.ps1"
+Import-Module "$PSScriptRoot\..\ProbeNative.psm1" -Force
+$null = Import-ProbeNative
 function Run($mode, $extra = '') { Start-Process powershell.exe "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$child`" -Exchange `"$TestDrive`" -Mode $mode $extra" -PassThru -WindowStyle Hidden }
 
 Describe 'Child' {
   AfterEach {
     # Breakaway starts a grandchild via CreateProcessW directly (not a Start-Process child), so
-    # killing $p above never touches it. Clean it up here by PID from breakaway.json, and verify.
+    # killing $p above never touches it. Kill it by PID from breakaway.json, but only when its
+    # creation time still matches, so a recycled PID is never terminated.
     $bPath = "$TestDrive\breakaway.json"
     if (Test-Path $bPath) {
       try {
         $b = Get-Content $bPath -Raw | ConvertFrom-Json
-        if ($b.pid) {
-          Stop-Process -Id $b.pid -Force -ErrorAction SilentlyContinue
+        if ($b.pid -and $b.PSObject.Properties['creation']) {
+          [void][AcProbe.Native]::KillPidIfCreation([int]$b.pid, [long]$b.creation)
         }
       } catch {}
     }

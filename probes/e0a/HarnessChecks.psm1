@@ -281,7 +281,9 @@ function Invoke-C5KillOnClose {
   }
   finally {
     if ($sub -and -not $sub.HasExited) { try { [void][AcProbe.Native]::KillPid($sub.Id) } catch {} }
-    if ($details.ContainsKey('grandchild_pid')) { try { [void][AcProbe.Native]::KillPid([int]$details['grandchild_pid']) } catch {} }
+    if ($details.ContainsKey('grandchild_pid') -and $details.ContainsKey('grandchild_creation')) {
+      try { [void][AcProbe.Native]::KillPidIfCreation([int]$details['grandchild_pid'], [long]$details['grandchild_creation']) } catch {}
+    }
   }
   Add-ProbeCheck -Result $Result -Id 'C5' -Name 'kill_on_job_close' -Outcome $outcome -Details $details
 }
@@ -306,6 +308,7 @@ function Invoke-C6Breakaway {
     $details['child_reported_ok'] = $b.ok
     $details['child_win32_error'] = $b.win32_error
     $details['grandchild_pid'] = $b.pid
+    if ($b.PSObject.Properties['creation']) { $details['grandchild_creation'] = $b.creation }
 
     if (-not $b.ok) {
       $outcome = 'pass'   # breakaway was rejected -- can't escape the job.
@@ -323,7 +326,9 @@ function Invoke-C6Breakaway {
     if ($proc) { $details['child_pid'] = $proc.Pid }
   }
   finally {
-    if ($b -and $b.ok -and $b.pid) { try { [void][AcProbe.Native]::KillPid([int]$b.pid) } catch {} }
+    if ($b -and $b.ok -and $b.pid -and $b.PSObject.Properties['creation']) {
+      try { [void][AcProbe.Native]::KillPidIfCreation([int]$b.pid, [long]$b.creation) } catch {}
+    }
     if ($proc -and $proc.Pid) { try { [void][AcProbe.Native]::KillPid($proc.Pid) } catch {} }
     if ($job -ne [IntPtr]::Zero) { try { [void][AcProbe.Native]::TerminateJob($job) } catch {} }
   }

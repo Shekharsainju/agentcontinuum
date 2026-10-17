@@ -25,6 +25,22 @@ Describe 'Job basics (self, no elevation)' {
     Start-Sleep 1; [AcProbe.Native]::JobActive($job) | Should Be 0
   }
 }
+Describe 'KillPidIfCreation guards against a recycled PID' {
+  It 'kills only when the creation time matches' {
+    Import-ProbeNative | Out-Null
+    $p = [AcProbe.Native]::StartSelf('powershell.exe -NoProfile -Command Start-Sleep 30', $false, $false)
+    try {
+      $creation = [AcProbe.Native]::CreationTime($p.Pid)
+      $creation | Should Not Be -1
+      [AcProbe.Native]::KillPidIfCreation($p.Pid, 1) | Should Be $false
+      (Get-Process -Id $p.Pid -ErrorAction SilentlyContinue) | Should Not BeNullOrEmpty
+      [AcProbe.Native]::KillPidIfCreation($p.Pid, $creation) | Should Be $true
+      Start-Sleep -Milliseconds 500
+      (Get-Process -Id $p.Pid -ErrorAction SilentlyContinue) | Should BeNullOrEmpty
+    }
+    finally { [void][AcProbe.Native]::KillPid($p.Pid) }
+  }
+}
 Describe 'LSA error reporting (no elevation)' {
   It 'AddRight with a malformed SID returns ERROR_INVALID_SID and does not throw' {
     Import-ProbeNative | Out-Null

@@ -350,6 +350,26 @@ namespace AcProbe
             finally { CloseHandle(h); }
         }
 
+        public static bool KillPidIfCreation(int pid, long expectedCreation)
+        {
+            // Hold the handle across the identity check and the kill so the PID cannot be recycled
+            // between them; a recycled PID has a different creation time and is left untouched.
+            IntPtr h = OpenProcess(PROCESS_ALL_ACCESS, false, pid);
+            LastError = Marshal.GetLastWin32Error();
+            if (h == IntPtr.Zero) return false;
+            try
+            {
+                long creation, exit, kernel, user;
+                bool got = GetProcessTimes(h, out creation, out exit, out kernel, out user);
+                LastError = Marshal.GetLastWin32Error();
+                if (!got || creation != expectedCreation) return false;
+                bool ok = TerminateProcess(h, 1);
+                LastError = Marshal.GetLastWin32Error();
+                return ok;
+            }
+            finally { CloseHandle(h); }
+        }
+
         public static long CreationTime(int pid)
         {
             const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;

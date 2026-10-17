@@ -79,10 +79,12 @@ switch ($Mode) {
   'Breakaway' {
     $cmdLine = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Exchange `"$ExchangeFull`" -Mode Heartbeat -BeatFile heartbeat-breakaway.txt"
     $result = [AcProbe.Native]::StartSelf($cmdLine, $false, $true)
+    $creation = if ($result.Pid) { [AcProbe.Native]::CreationTime($result.Pid) } else { -1 }
     Write-ProbeJson -Data ([ordered]@{
         ok          = ($result.Win32Error -eq 0)
         win32_error = $result.Win32Error
         pid         = $result.Pid
+        creation    = $creation
       }) -Path (Join-Path $ExchangeFull 'breakaway.json')
   }
   'Escape' {
