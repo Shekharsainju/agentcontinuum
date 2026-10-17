@@ -11,8 +11,13 @@ function New-ProbeSecretPipe {
     [string]$DaclSid
   )
   if (-not $Name) {
-    $hex = -join (1..16 | ForEach-Object { '{0:x}' -f (Get-Random -Minimum 0 -Maximum 16) })
-    $Name = "ac-probe-$hex"
+    $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+    try {
+      $rb = New-Object byte[] 8
+      $rng.GetBytes($rb)
+      $Name = 'ac-probe-' + (-join ($rb | ForEach-Object { '{0:x2}' -f $_ }))
+    }
+    finally { $rng.Dispose() }
   }
   if (-not $DaclSid) { $DaclSid = $AllowedSid }
 
@@ -58,7 +63,7 @@ function New-ProbeSecretPipe {
       $server.RunAsClient($worker)
       $clientSid = $box['sid']
 
-      if ($clientSid -eq $AllowedSid) {
+      if ($clientSid -ceq $AllowedSid) {
         $plain = ConvertFrom-ProbeSecureString $Secret
         $bytes = [System.Text.Encoding]::Unicode.GetBytes($plain)
         try {
@@ -116,19 +121,27 @@ function Receive-ProbeSecret {
     $client.Connect($TimeoutMs)
     $ms = New-Object System.IO.MemoryStream
     $buf = New-Object byte[] 512
-    while (($n = $client.Read($buf, 0, $buf.Length)) -gt 0) { $ms.Write($buf, 0, $n) }
-    $bytes = $ms.ToArray()
-    if ($bytes.Length -eq 0) { throw 'no secret delivered' }
-    $chars = [System.Text.Encoding]::Unicode.GetChars($bytes)
     try {
-      $ss = New-Object System.Security.SecureString
-      foreach ($c in $chars) { $ss.AppendChar($c) }
-      $ss.MakeReadOnly()
-      $ss
+      while (($n = $client.Read($buf, 0, $buf.Length)) -gt 0) { $ms.Write($buf, 0, $n) }
+      $bytes = $ms.ToArray()
+      if ($bytes.Length -eq 0) { throw 'no secret delivered' }
+      $chars = [System.Text.Encoding]::Unicode.GetChars($bytes)
+      try {
+        $ss = New-Object System.Security.SecureString
+        foreach ($c in $chars) { $ss.AppendChar($c) }
+        $ss.MakeReadOnly()
+        $ss
+      }
+      finally {
+        [Array]::Clear($chars, 0, $chars.Length)
+        [Array]::Clear($bytes, 0, $bytes.Length)
+      }
     }
     finally {
-      [Array]::Clear($chars, 0, $chars.Length)
-      [Array]::Clear($bytes, 0, $bytes.Length)
+      [Array]::Clear($buf, 0, $buf.Length)
+      $mb = $ms.GetBuffer()
+      [Array]::Clear($mb, 0, $mb.Length)
+      $ms.Dispose()
     }
   }
   finally { $client.Dispose() }
