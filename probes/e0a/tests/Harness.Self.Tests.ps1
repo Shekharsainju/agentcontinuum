@@ -9,7 +9,7 @@ Describe 'Harness self mode' {
       -Run self -OutDir $outDir -Exchange $exchange -BinDir $binDir
     $j = Get-Content "$outDir\results-self.json" -Raw | ConvertFrom-Json
     ($j.checks.id -join ',') | Should Be 'C3,C3b,C4,C5,C6'
-    $j.checks | ForEach-Object { $_.result | Should Match '^(pass|fail|error)$' }
+    $j.checks | ForEach-Object { $_.result | Should Be 'pass' }
     $j.harness_in_job_before | Should Not BeNullOrEmpty
 
     # Hygiene: no leftover probe children/sub-harnesses from this run.
@@ -22,44 +22,52 @@ Describe 'Harness self mode' {
 
 Describe 'Invoke-C3FreezeThaw thaws on exception mid-freeze' {
 
-  Import-Module (Join-Path $binDir 'ProbeNative.psm1') -Force
-  Import-Module (Join-Path $binDir 'ProbeCommon.psm1') -Force
-  Import-Module (Join-Path $binDir 'HarnessChecks.psm1') -Force
-
-  $native = Import-ProbeNative
-  if (-not $native.Loaded) { throw "native_load_blocked: $($native.Error)" }
-
-  $childPath = Join-Path $binDir 'Child.ps1'
-  $Launch = {
-    param($Mode, $ExtraArgs, $Suspended)
-    $cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$childPath`" -Mode $Mode $ExtraArgs"
-    [AcProbe.Native]::StartSelf($cmd, [bool]$Suspended, $false)
-  }.GetNewClosure()
-
-  AfterEach {
-    if ($script:result) {
-      foreach ($c in $script:result.checks) {
-        if ($c.details -and $c.details.child_pid) {
-          try { [AcProbe.Native]::KillPid([int]$c.details.child_pid) } catch {}
-        }
-      }
-    }
-  }
-
+  # Import HarnessChecks.psm1 directly (per the brief), but do the real work -- running the check,
+  # measuring whether the heartbeat resumes, and cleaning up -- inside its own child
+  # powershell.exe, exactly like the Describe above does for the full harness.
   It 'records an error outcome and still resumes the child heartbeat' {
+    $helper = "$TestDrive\run-c3-failafterfreeze.ps1"
+    @'
+param($BinDir, $Exchange, $ResultPath)
+Import-Module (Join-Path $BinDir 'ProbeNative.psm1') -Force
+Import-Module (Join-Path $BinDir 'ProbeCommon.psm1') -Force
+Import-Module (Join-Path $BinDir 'HarnessChecks.psm1') -Force
+$native = Import-ProbeNative
+if (-not $native.Loaded) { exit 3 }
+$childPath = Join-Path $BinDir 'Child.ps1'
+$Launch = {
+  param($Mode, $ExtraArgs, $Suspended)
+  $cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$childPath`" -Mode $Mode $ExtraArgs"
+  [AcProbe.Native]::StartSelf($cmd, [bool]$Suspended, $false)
+}.GetNewClosure()
+$Ctx = @{ Launch = $Launch; Exchange = $Exchange; BinDir = $BinDir; CtlDir = ''; ResultsDir = '' }
+$result = New-ProbeResult -Run 'self'
+Invoke-C3FreezeThaw -Result $result -Ctx $Ctx -FailAfterFreeze
+$c3 = $result.checks | Where-Object { $_.id -eq 'C3' }
+
+# Measure resume from inside THIS process too -- not just set it up and let the Pester host
+# process measure it, which proved unreliable in this sandbox (see Describe comment above).
+$beatPath = Join-Path $Exchange 'C3\heartbeat.txt'
+$before = @(Read-Heartbeat $beatPath).Count
+Start-Sleep -Seconds 2
+$after = @(Read-Heartbeat $beatPath).Count
+
+if ($c3.details.child_pid) { try { [AcProbe.Native]::KillPid([int]$c3.details.child_pid) } catch {} }
+
+[ordered]@{ outcome = $c3.result; resumed = ($after -gt $before); before = $before; after = $after } |
+  ConvertTo-Json | Set-Content -LiteralPath $ResultPath -Encoding UTF8
+'@ | Set-Content -LiteralPath $helper -Encoding UTF8
+
     $exchange = "$TestDrive\ex2"
-    $Ctx = @{ Launch = $Launch; Exchange = $exchange; BinDir = $binDir; CtlDir = ''; ResultsDir = '' }
-    $script:result = New-ProbeResult -Run 'self'
+    New-Item -ItemType Directory -Force -Path $exchange | Out-Null
+    $resultPath = Join-Path $exchange 'c3-result.json'
 
-    Invoke-C3FreezeThaw -Result $script:result -Ctx $Ctx -FailAfterFreeze
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper `
+      -BinDir $binDir -Exchange $exchange -ResultPath $resultPath
 
-    $c3 = $script:result.checks | Where-Object { $_.id -eq 'C3' }
-    $c3.result | Should Be 'error'
+    $j = Get-Content $resultPath -Raw | ConvertFrom-Json
 
-    $beatPath = Join-Path $exchange 'C3\heartbeat.txt'
-    $before = @(Read-Heartbeat $beatPath).Count
-    Start-Sleep -Seconds 2
-    $after = @(Read-Heartbeat $beatPath).Count
-    $after | Should BeGreaterThan $before
+    $j.outcome | Should Be 'error'
+    $j.resumed | Should Be $true
   }
 }
