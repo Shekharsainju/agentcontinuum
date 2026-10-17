@@ -119,13 +119,13 @@ namespace AcProbe
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern bool TerminateJobObject(IntPtr hJob, uint uExitCode);
 
-        [DllImport("ntdll.dll")]
+        [DllImport("ntdll.dll", SetLastError = true)]
         static extern int NtSetInformationJobObject(IntPtr hJob, int JobObjectInformationClass, ref JOBOBJECT_FREEZE_INFORMATION lpJobObjectInformation, int cbJobObjectInformationLength);
 
-        [DllImport("ntdll.dll")]
+        [DllImport("ntdll.dll", SetLastError = true)]
         static extern int NtSuspendProcess(IntPtr ProcessHandle);
 
-        [DllImport("ntdll.dll")]
+        [DllImport("ntdll.dll", SetLastError = true)]
         static extern int NtResumeProcess(IntPtr ProcessHandle);
 
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -170,8 +170,16 @@ namespace AcProbe
             if (job == IntPtr.Zero) return job;
             var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
             info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref info, Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
+            bool ok = SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref info, Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
             LastError = Marshal.GetLastWin32Error();
+            if (!ok)
+            {
+                // Never hand back a job lacking KILL_ON_JOB_CLOSE.
+                int err = LastError;
+                CloseHandle(job);
+                LastError = err;
+                return IntPtr.Zero;
+            }
             return job;
         }
 
@@ -245,22 +253,31 @@ namespace AcProbe
             info.Freeze = freeze ? (byte)1 : (byte)0;
             info.Swap = 0;
             int status = NtSetInformationJobObject(job, JobObjectFreezeInformation, ref info, FreezeInfoSize());
-            LastError = Marshal.GetLastWin32Error();
+            LastError = NtToWin32(status);
             return status;
         }
 
         public static int SuspendProcess(IntPtr proc)
         {
             int status = NtSuspendProcess(proc);
-            LastError = Marshal.GetLastWin32Error();
+            LastError = NtToWin32(status);
             return status;
         }
 
         public static int ResumeProcess(IntPtr proc)
         {
             int status = NtResumeProcess(proc);
-            LastError = Marshal.GetLastWin32Error();
+            LastError = NtToWin32(status);
             return status;
+        }
+
+        [DllImport("ntdll.dll")]
+        static extern int RtlNtStatusToDosError(int Status);
+
+        // NTSTATUS APIs do not SetLastError; derive the Win32 error from the status (0 on success).
+        static int NtToWin32(int status)
+        {
+            return status >= 0 ? 0 : RtlNtStatusToDosError(status);
         }
 
         public static ProcInfo StartAsUser(string user, string domain, string password, string cmdLine, bool suspended)
@@ -354,10 +371,10 @@ namespace AcProbe
         [DllImport("advapi32.dll", SetLastError = true)]
         static extern int LsaOpenPolicy(ref LSA_UNICODE_STRING SystemName, ref LSA_OBJECT_ATTRIBUTES ObjectAttributes, int DesiredAccess, out IntPtr PolicyHandle);
 
-        [DllImport("advapi32.dll")]
+        [DllImport("advapi32.dll", SetLastError = true)]
         static extern int LsaClose(IntPtr ObjectHandle);
 
-        [DllImport("advapi32.dll")]
+        [DllImport("advapi32.dll", SetLastError = true)]
         static extern int LsaNtStatusToWinError(int Status);
 
         [DllImport("advapi32.dll", SetLastError = true)]
@@ -375,100 +392,95 @@ namespace AcProbe
         const int POLICY_LOOKUP_NAMES = 0x00000800;
         const int POLICY_CREATE_ACCOUNT = 0x00000010;
 
-        static IntPtr OpenPolicy(int access)
+        // Returns the NTSTATUS from LsaOpenPolicy; policy is IntPtr.Zero on failure.
+        static int OpenPolicy(int access, out IntPtr policy)
         {
             var sysName = new LSA_UNICODE_STRING();
             var oa = new LSA_OBJECT_ATTRIBUTES();
-            IntPtr handle;
-            LsaOpenPolicy(ref sysName, ref oa, access, out handle);
-            return handle;
+            return LsaOpenPolicy(ref sysName, ref oa, access, out policy);
+        }
+
+        static LSA_UNICODE_STRING MakeLsaString(IntPtr buf, string s)
+        {
+            return new LSA_UNICODE_STRING { Buffer = buf, Length = (ushort)(s.Length * 2), MaximumLength = (ushort)(s.Length * 2) };
         }
 
         public static string[] AccountRights(string sid)
         {
-            IntPtr policy = OpenPolicy(POLICY_LOOKUP_NAMES);
-            if (policy == IntPtr.Zero) return new string[0];
-            IntPtr sidPtr = IntPtr.Zero;
-            IntPtr rightsPtr;
+            IntPtr sidPtr;
+            if (!ConvertStringSidToSid(sid, out sidPtr)) { LastError = Marshal.GetLastWin32Error(); return new string[0]; }
+            IntPtr policy;
+            IntPtr rightsPtr = IntPtr.Zero;
             try
             {
-                sidPtr = SidFromString(sid);
-                int count;
-                int status = LsaEnumerateAccountRights(policy, sidPtr, out rightsPtr, out count);
-                LastError = LsaNtStatusToWinError(status);
-                if (status != 0) return new string[0];
-                var rights = new string[count];
-                for (int i = 0; i < count; i++)
+                int openStatus = OpenPolicy(POLICY_LOOKUP_NAMES, out policy);
+                if (openStatus != 0) { LastError = LsaNtStatusToWinError(openStatus); return new string[0]; }
+                try
                 {
-                    IntPtr item = new IntPtr(rightsPtr.ToInt64() + i * Marshal.SizeOf(typeof(LSA_UNICODE_STRING)));
-                    var lsaStr = (LSA_UNICODE_STRING)Marshal.PtrToStructure(item, typeof(LSA_UNICODE_STRING));
-                    rights[i] = Marshal.PtrToStringUni(lsaStr.Buffer, lsaStr.Length / 2);
+                    int count;
+                    int status = LsaEnumerateAccountRights(policy, sidPtr, out rightsPtr, out count);
+                    LastError = status == 0 ? 0 : LsaNtStatusToWinError(status);
+                    if (status != 0) return new string[0];
+                    var rights = new string[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        IntPtr item = new IntPtr(rightsPtr.ToInt64() + i * Marshal.SizeOf(typeof(LSA_UNICODE_STRING)));
+                        var lsaStr = (LSA_UNICODE_STRING)Marshal.PtrToStructure(item, typeof(LSA_UNICODE_STRING));
+                        rights[i] = Marshal.PtrToStringUni(lsaStr.Buffer, lsaStr.Length / 2);
+                    }
+                    return rights;
                 }
-                LsaFreeMemory(rightsPtr);
-                return rights;
+                finally
+                {
+                    if (rightsPtr != IntPtr.Zero) LsaFreeMemory(rightsPtr);
+                    LsaClose(policy);
+                }
             }
-            finally
-            {
-                if (sidPtr != IntPtr.Zero) Marshal.FreeHGlobal(sidPtr);
-                LsaClose(policy);
-            }
+            finally { Marshal.FreeHGlobal(sidPtr); }
         }
 
+        // Returns 0 on success, otherwise a Win32 error code (also stored in LastError).
         public static int AddRight(string sid, string right)
         {
-            IntPtr policy = OpenPolicy(POLICY_CREATE_ACCOUNT);
-            if (policy == IntPtr.Zero) return Marshal.GetLastWin32Error();
-            IntPtr sidPtr = IntPtr.Zero;
-            IntPtr rightBuf = IntPtr.Zero;
-            try
-            {
-                sidPtr = SidFromString(sid);
-                rightBuf = Marshal.StringToHGlobalUni(right);
-                var lsaRight = new LSA_UNICODE_STRING { Buffer = rightBuf, Length = (ushort)(right.Length * 2), MaximumLength = (ushort)(right.Length * 2) };
-                int status = LsaAddAccountRights(policy, sidPtr, new[] { lsaRight }, 1);
-                LastError = LsaNtStatusToWinError(status);
-                return status;
-            }
-            finally
-            {
-                if (sidPtr != IntPtr.Zero) Marshal.FreeHGlobal(sidPtr);
-                if (rightBuf != IntPtr.Zero) Marshal.FreeHGlobal(rightBuf);
-                LsaClose(policy);
-            }
+            return ChangeRight(sid, right, true);
         }
 
         public static int RemoveRight(string sid, string right)
         {
-            IntPtr policy = OpenPolicy(POLICY_CREATE_ACCOUNT);
-            if (policy == IntPtr.Zero) return Marshal.GetLastWin32Error();
-            IntPtr sidPtr = IntPtr.Zero;
+            return ChangeRight(sid, right, false);
+        }
+
+        static int ChangeRight(string sid, string right, bool add)
+        {
+            IntPtr sidPtr;
+            if (!ConvertStringSidToSid(sid, out sidPtr)) { LastError = Marshal.GetLastWin32Error(); return LastError; }
             IntPtr rightBuf = IntPtr.Zero;
             try
             {
-                sidPtr = SidFromString(sid);
-                rightBuf = Marshal.StringToHGlobalUni(right);
-                var lsaRight = new LSA_UNICODE_STRING { Buffer = rightBuf, Length = (ushort)(right.Length * 2), MaximumLength = (ushort)(right.Length * 2) };
-                int status = LsaRemoveAccountRights(policy, sidPtr, false, new[] { lsaRight }, 1);
-                LastError = LsaNtStatusToWinError(status);
-                return status;
+                IntPtr policy;
+                int openStatus = OpenPolicy(POLICY_CREATE_ACCOUNT, out policy);
+                if (openStatus != 0) { LastError = LsaNtStatusToWinError(openStatus); return LastError; }
+                try
+                {
+                    rightBuf = Marshal.StringToHGlobalUni(right);
+                    var arr = new[] { MakeLsaString(rightBuf, right) };
+                    int status = add ? LsaAddAccountRights(policy, sidPtr, arr, 1)
+                                     : LsaRemoveAccountRights(policy, sidPtr, false, arr, 1);
+                    LastError = status == 0 ? 0 : LsaNtStatusToWinError(status);
+                    return LastError;
+                }
+                finally { LsaClose(policy); }
             }
             finally
             {
-                if (sidPtr != IntPtr.Zero) Marshal.FreeHGlobal(sidPtr);
+                Marshal.FreeHGlobal(sidPtr);
                 if (rightBuf != IntPtr.Zero) Marshal.FreeHGlobal(rightBuf);
-                LsaClose(policy);
             }
         }
 
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         static extern bool ConvertStringSidToSid(string StringSid, out IntPtr Sid);
 
-        static IntPtr SidFromString(string sid)
-        {
-            IntPtr p;
-            ConvertStringSidToSid(sid, out p);
-            return p; // freed via Marshal.FreeHGlobal is wrong for this allocator in real use; acceptable for this throwaway probe scope.
-        }
 
         public static PipeOpen CreateFirstInstancePipe(string name, byte[] securityDescriptor)
         {
