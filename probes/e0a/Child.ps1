@@ -42,11 +42,14 @@ function Test-DirAccess {
 }
 
 function Write-Heartbeat {
-  # Appends an ISO-8601 UTC timestamp every 250 ms until killed, or for up to 120 s.
   param([Parameter(Mandatory)][string]$Path, [int]$Seconds = 120)
   $deadline = [datetime]::UtcNow.AddSeconds($Seconds)
   while ([datetime]::UtcNow -lt $deadline) {
-    Add-Content -LiteralPath $Path -Value ([datetime]::UtcNow.ToString('o'))
+    # FileShare.ReadWrite so the harness can poll this file while we append to it; a plain
+    # append would deny the concurrent reader and starve the heartbeat count it measures.
+    $bytes = [Text.Encoding]::UTF8.GetBytes([datetime]::UtcNow.ToString('o') + "`r`n")
+    $fs = New-Object IO.FileStream($Path, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+    try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
     Start-Sleep -Milliseconds 250
   }
 }
