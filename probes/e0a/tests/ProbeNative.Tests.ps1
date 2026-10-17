@@ -25,3 +25,10 @@ Describe 'Job basics (self, no elevation)' {
     Start-Sleep 1; [AcProbe.Native]::JobActive($job) | Should Be 0
   }
 }
+Describe 'LSA error reporting (no elevation)' {
+  It 'AddRight with a malformed SID returns ERROR_INVALID_SID and does not throw' {
+    Import-ProbeNative | Out-Null
+    { [AcProbe.Native]::AddRight('not-a-sid', 'SeBatchLogonRight') } | Should Not Throw
+    [AcProbe.Native]::AddRight('not-a-sid', 'SeBatchLogonRight') | Should Be 1337
+  }
+}
