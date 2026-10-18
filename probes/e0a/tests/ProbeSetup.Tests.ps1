@@ -71,3 +71,13 @@ Describe 'Set-ProbeFolders' {
     $global:probeApplyOrder[0] | Should Be 'C:\ProgramData\ac-probe'
   }
 }
+
+Describe 'New-ProbeAccount' {
+  It 'adds to Users only, with description' {
+    Mock -ModuleName ProbeSetup New-LocalUser { [pscustomobject]@{SID=[pscustomobject]@{Value='S-X'}} }
+    Mock -ModuleName ProbeSetup Add-LocalGroupMember {}
+    New-ProbeAccount 'ac-probe-ctl' (New-ProbePassword) | Should Be 'S-X'
+    Assert-MockCalled -ModuleName ProbeSetup New-LocalUser -ParameterFilter { $Description -eq 'AgentContinuum E0a probe - safe to delete' -and $PasswordNeverExpires -and $UserMayNotChangePassword }
+    Assert-MockCalled -ModuleName ProbeSetup Add-LocalGroupMember -Times 1 -ParameterFilter { $SID -eq 'S-1-5-32-545' -and $Member -eq 'ac-probe-ctl' }
+  }
+}
