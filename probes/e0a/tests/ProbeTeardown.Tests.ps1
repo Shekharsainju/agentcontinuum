@@ -42,6 +42,15 @@ Describe 'Invoke-ProbeTeardown' {
     (($r.Steps | Where-Object Name -eq 'RemoveAccounts')) | Should Not BeNullOrEmpty
   }
 
+  It 'strips the batch right from every discovered probe SID even without a manifest' {
+    Mock -ModuleName ProbeTeardown Get-LocalUser {
+      [pscustomobject]@{ SID = [pscustomobject]@{ Value = 'S-1-5-21-ctl' } },
+      [pscustomobject]@{ SID = [pscustomobject]@{ Value = 'S-1-5-21-agent' } } }
+    Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\' | Out-Null
+    Assert-MockCalled -ModuleName ProbeTeardown Remove-ProbeRight -ParameterFilter { $Sid -eq 'S-1-5-21-ctl' -and $Right -eq 'SeBatchLogonRight' } -Times 1 -Scope It
+    Assert-MockCalled -ModuleName ProbeTeardown Remove-ProbeRight -ParameterFilter { $Sid -eq 'S-1-5-21-agent' -and $Right -eq 'SeBatchLogonRight' } -Times 1 -Scope It
+  }
+
   It 'revokes rights listed in a manifest even when the account is gone' {
     $root = "$TestDrive\res"
     New-Item -ItemType Directory -Force -Path "$root\stamp" | Out-Null
