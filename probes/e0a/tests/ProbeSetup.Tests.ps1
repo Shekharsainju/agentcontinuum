@@ -391,3 +391,46 @@ Describe 'Start-E0aProbe setup.json S1' {
     Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeTeardown -Times 2
   }
 }
+
+Describe 'Start-E0aProbe setup.json T0' {
+  BeforeEach {
+    $global:probeTeardownCalls = 0
+    $global:probeFinalVerifyOk = $true
+    $global:probeWrites = @()
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown {
+      $global:probeTeardownCalls++
+      $ok = ($global:probeTeardownCalls -lt 2) -or $global:probeFinalVerifyOk
+      [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $ok; Error = 'remnants' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult { $global:probeWrites += ,((@($Result.checks) | ForEach-Object { $_.id }) -join ',') }
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Test-SecretAbsent { [pscustomobject]@{ Clean = $true; Hits = @(); Unscanned = @() } }
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $global:probeRunOk = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunOk }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunOk }
+  }
+  It 'writes T0 pass as the last action when teardown verifies' {
+    Start-E0aProbe | Should Be 0
+    $global:probeWrites[-1] | Should Be 'C1,S0,S1,T0'
+  }
+  It 'records T0 fail and exits nonzero when teardown leaves remnants' {
+    $global:probeFinalVerifyOk = $false
+    Start-E0aProbe | Should Not Be 0
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $t0 = @($Result.checks) | Where-Object { $_.id -eq 'T0' }
+      $t0.result -eq 'fail' -and $t0.details.error -eq 'remnants' }
+  }
+  It 'writes T0 after teardown even when run A threw' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { throw 'boom' }
+    Start-E0aProbe | Should Not Be 0
+    $global:probeWrites[-1] | Should Be 'C1,S0,S1,T0'
+  }
+}
