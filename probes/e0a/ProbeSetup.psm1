@@ -236,7 +236,19 @@ function Start-E0aProbe {
   [CmdletBinding()]
   param([string]$ReaderAccount)
 
-  if (-not (Test-ProbePrecheck).Ok) { return 2 }
+  $resultsDir = Join-Path $script:ResultsRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+  $setup = New-ProbeResult -Run 'setup'
+  $setupPath = Join-Path $resultsDir 'setup.json'
+
+  $precheck = Test-ProbePrecheck
+  $c1Outcome = if ($precheck.Ok) { 'pass' } else { 'fail' }
+  Add-ProbeCheck -Result $setup -Id 'C1' -Name 'precheck' -Outcome $c1Outcome -Details @{
+    elevated = $precheck.Elevated; seclogon = $precheck.SeclogonStatus }
+  if (-not $precheck.Ok) {
+    New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
+    Write-ProbeResult -Result $setup -Path $setupPath
+    return 2
+  }
   if (-not (Import-ProbeNative).Loaded) { Write-Host 'native helper failed to load'; return 3 }
 
   $preClean = Invoke-ProbeTeardown
@@ -245,7 +257,6 @@ function Start-E0aProbe {
     return 4
   }
 
-  $resultsDir = Join-Path $script:ResultsRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
   $exitCode = 0
   try {
     New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
@@ -276,6 +287,7 @@ function Start-E0aProbe {
       CtlPassword   = $ctlPassword
       AgentPassword = $agentPassword
     }
+    Write-ProbeResult -Result $setup -Path $setupPath
     Invoke-ProbeRunA -Ctx $ctx | Out-Null
     Invoke-ProbeRunB -Ctx $ctx | Out-Null
   }
