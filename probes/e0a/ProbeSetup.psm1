@@ -328,8 +328,14 @@ function Start-E0aProbe {
       }
       Write-ProbeResult -Result $setup -Path $setupPath
     }
-    Invoke-ProbeTeardown | Out-Null
+    $finalTeardown = Invoke-ProbeTeardown
   }
+
+  $verify = $finalTeardown.Steps | Where-Object { $_.Name -eq 'Verify' }
+  $t0Outcome = if ($verify.Ok) { 'pass' } else { 'fail' }
+  Add-ProbeCheck -Result $setup -Id 'T0' -Name 'teardown_verify' -Outcome $t0Outcome -Details @{ error = $verify.Error }
+  Write-ProbeResult -Result $setup -Path $setupPath
+  if (-not $verify.Ok) { $exitCode = 1 }
   Write-Host "results: $resultsDir"
   $exitCode
 }
