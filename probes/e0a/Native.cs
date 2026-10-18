@@ -386,7 +386,7 @@ namespace AcProbe
             finally { CloseHandle(h); }
         }
 
-        // --- LSA account rights (admin only; compiled here, not exercised by self-user tests) ---
+        // LSA account rights (admin only; compiled here, not exercised by self-user tests).
 
         [DllImport("advapi32.dll", SetLastError = true)]
         static extern int LsaOpenPolicy(ref LSA_UNICODE_STRING SystemName, ref LSA_OBJECT_ATTRIBUTES ObjectAttributes, int DesiredAccess, out IntPtr PolicyHandle);
