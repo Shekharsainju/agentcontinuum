@@ -22,6 +22,7 @@ Describe 'Invoke-ProbeTeardown' {
     Mock -ModuleName ProbeTeardown Remove-ProbeRight { }
     Mock -ModuleName ProbeTeardown Remove-ProbeProfileInstance { }
     Mock -ModuleName ProbeTeardown Get-ProbeProfileListSid { }
+    Mock -ModuleName ProbeTeardown Get-ProbeAccountRight { @() }
   }
 
   It 'is a no-op success when nothing exists' {
@@ -67,5 +68,16 @@ Describe 'Invoke-ProbeTeardown' {
       ConvertTo-Json | Set-Content -LiteralPath "$root\stamp\manifest.json"
     $r = Invoke-ProbeTeardown -ResultsRoot $root
     Assert-MockCalled -ModuleName ProbeTeardown Remove-ProbeRight -ParameterFilter { $Sid -eq 'S-C' -and $Right -eq 'SeBatchLogonRight' } -Times 1 -Scope It
+  }
+
+  It 'fails verification when a probe SID still holds an LSA right' {
+    $root = "$TestDrive\rights"
+    New-Item -ItemType Directory -Force -Path "$root\stamp" | Out-Null
+    @{ ctl_sid = 'S-C'; agent_sid = 'S-A' } | ConvertTo-Json | Set-Content -LiteralPath "$root\stamp\manifest.json"
+    Mock -ModuleName ProbeTeardown Get-ProbeAccountRight { @('SeBatchLogonRight') } -ParameterFilter { $Sid -eq 'S-C' }
+    $r = Invoke-ProbeTeardown -ResultsRoot $root
+    $verify = $r.Steps | Where-Object Name -eq 'Verify'
+    $verify.Ok | Should Be $false
+    $verify.Error | Should Match 'rights'
   }
 }
