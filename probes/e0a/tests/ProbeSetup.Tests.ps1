@@ -444,3 +444,46 @@ Describe 'Get-ProbeAclSpec ctl folder' {
     ($s['C:\ProgramData\ac-probe\ctl'].Sid -contains 'S-A') | Should Be $false
   }
 }
+
+Describe 'Start-E0aProbe S0 run outcomes' {
+  BeforeEach {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult {}
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Test-SecretAbsent { [pscustomobject]@{ Clean = $true; Hits = @(); Unscanned = @() } }
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $global:probeRunA = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    $global:probeRunB = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $false; BatchAfterRegister = $false; NeededGrant = $false; StrayAfterRun = @() }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunA }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunB }
+  }
+  It 'records run B outcome and stray pids and passes when both runs are done' {
+    $global:probeRunB.StrayAfterRun = @(77)
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $s0 = @($Result.checks) | Where-Object { $_.id -eq 'S0' }
+      $s0.result -eq 'pass' -and $s0.details.run_b_outcome -eq 'done' -and @($s0.details.run_b_stray_pids) -contains 77 }
+  }
+  It 'flips S0 to finding when run B does not finish' {
+    $global:probeRunB.Outcome = 'start_failed'
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $s0 = @($Result.checks) | Where-Object { $_.id -eq 'S0' }
+      $s0.result -eq 'finding' -and $s0.details.run_b_outcome -eq 'start_failed' }
+  }
+  It 'flips S0 to finding when run A times out' {
+    $global:probeRunA.Outcome = 'timeout'
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $s0 = @($Result.checks) | Where-Object { $_.id -eq 'S0' }
+      $s0.result -eq 'finding' -and $s0.details.run_a_outcome -eq 'timeout' }
+  }
+}
