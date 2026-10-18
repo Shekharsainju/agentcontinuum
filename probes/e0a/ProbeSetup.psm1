@@ -231,6 +231,16 @@ function Copy-ProbeBinaries {
     Copy-Item -Destination $Destination
 }
 
+function Invoke-ProbeFinalTeardown {
+  <# Tears down, retrying a single time on a thrown error, and always returns a result carrying a Verify step. #>
+  $err = ''
+  for ($i = 0; $i -lt 2; $i++) {
+    try { return Invoke-ProbeTeardown }
+    catch { $err = [string]$_.Exception.Message }
+  }
+  [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $false; Error = $err }) }
+}
+
 function Start-E0aProbe {
   <# Creates the probe accounts, runs A and B, and always tears down. Returns the process exit code. #>
   [CmdletBinding()]
@@ -345,4 +355,4 @@ function Start-E0aProbe {
   $exitCode
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB, Start-E0aProbe
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB, Invoke-ProbeFinalTeardown, Start-E0aProbe
