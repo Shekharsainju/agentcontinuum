@@ -462,6 +462,17 @@ Describe 'Start-E0aProbe setup.json T0' {
     Start-E0aProbe | Should Not Be 0
     $global:probeWrites[-1] | Should Be 'C1,S0,S1,T0'
   }
+  It 'still records T0 as the last action when the final teardown keeps throwing' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown {
+      $global:probeTeardownCalls++
+      if ($global:probeTeardownCalls -eq 1) { return [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+      throw 'teardown exploded' }
+    Start-E0aProbe | Should Not Be 0
+    $global:probeWrites[-1] | Should Be 'C1,S0,S1,T0'
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $t0 = @($Result.checks) | Where-Object { $_.id -eq 'T0' }
+      $t0.result -eq 'fail' -and $t0.details.error -match 'teardown exploded' }
+  }
 }
 
 Describe 'Get-ProbeAclSpec ctl folder' {
