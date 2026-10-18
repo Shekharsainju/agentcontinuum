@@ -265,3 +265,35 @@ Describe 'Start-E0aProbe' {
     Assert-MockCalled -ModuleName ProbeSetup Resolve-ProbeAccountSid -Times 1 -ParameterFilter { $Name -eq 'someone' }
   }
 }
+
+Describe 'Start-E0aProbe setup.json C1' {
+  BeforeEach {
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult {}
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Test-SecretAbsent { [pscustomobject]@{ Clean = $true; Hits = @(); Unscanned = @() } }
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $global:probeRunOk = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunOk }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunOk }
+  }
+  It 'records C1 fail in setup.json and exits 2 when precheck fails' {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $false; Elevated = $false; SeclogonStatus = 'Stopped' } }
+    Start-E0aProbe | Should Be 2
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $Path -like '*\setup.json' -and (@($Result.checks) | Where-Object { $_.id -eq 'C1' }).result -eq 'fail' }
+  }
+  It 'records C1 pass in setup.json when precheck succeeds' {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Start-E0aProbe | Should Be 0
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $Path -like '*\setup.json' -and (@($Result.checks) | Where-Object { $_.id -eq 'C1' }).result -eq 'pass' }
+  }
+}
