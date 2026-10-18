@@ -24,3 +24,26 @@ Describe 'Test-ProbePrecheck' {
     (Test-ProbePrecheck).Ok | Should Be $true
   }
 }
+
+Describe 'Get-ProbeAclSpec' {
+  $s = Get-ProbeAclSpec -ReaderSid 'S-R' -CtlSid 'S-C' -AgentSid 'S-A'
+  It 'gives agent nothing on ctl and results' {
+    ($s['C:\ProgramData\ac-probe\ctl'].Sid -contains 'S-A') | Should Be $false
+    ($s['C:\ProgramData\ac-probe-results'].Sid -contains 'S-A') | Should Be $false
+  }
+  It 'gives reader read-only on results' {
+    ($s['C:\ProgramData\ac-probe-results'] | Where-Object Sid -eq 'S-R').Rights | Should Be 'ReadAndExecute'
+  }
+  It 'gives agent modify on exchange, ctl read' {
+    ($s['C:\ProgramData\ac-probe\exchange'] | Where-Object Sid -eq 'S-A').Rights | Should Be 'Modify'
+    ($s['C:\ProgramData\ac-probe\exchange'] | Where-Object Sid -eq 'S-C').Rights | Should Be 'Read'
+  }
+  It 'gives Admins full control everywhere' {
+    foreach ($path in $s.Keys) {
+      ($s[$path] | Where-Object Sid -eq 'S-1-5-32-544').Rights | Should Be 'FullControl'
+    }
+  }
+  It 'lets agent read bin but not write it' {
+    ($s['C:\ProgramData\ac-probe\bin'] | Where-Object Sid -eq 'S-A').Rights | Should Be 'ReadAndExecute'
+  }
+}
