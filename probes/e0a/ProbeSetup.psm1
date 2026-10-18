@@ -288,7 +288,25 @@ function Start-E0aProbe {
       AgentPassword = $agentPassword
     }
     Write-ProbeResult -Result $setup -Path $setupPath
-    Invoke-ProbeRunA -Ctx $ctx | Out-Null
+    $agentBatchRight = [bool](Get-ProbeBatchRight -Sid $agentSid)
+    try {
+      $runA = Invoke-ProbeRunA -Ctx $ctx
+      $s0Outcome = if ($runA.NeededGrant) { 'finding' } else { 'pass' }
+      Add-ProbeCheck -Result $setup -Id 'S0' -Name 'ctl_batch_logon_right' -Outcome $s0Outcome -Details @{
+        ctl_batch_before         = $runA.BatchBefore
+        ctl_batch_after_register = $runA.BatchAfterRegister
+        needed_grant             = $runA.NeededGrant
+        run_a_outcome            = $runA.Outcome
+        run_a_stray_pids         = @($runA.StrayAfterRun)
+        agent_batch_right        = $agentBatchRight
+      }
+    }
+    catch {
+      Add-ProbeCheck -Result $setup -Id 'S0' -Name 'ctl_batch_logon_right' -Outcome 'error' -Details @{
+        error = $_.Exception.Message; agent_batch_right = $agentBatchRight }
+      throw
+    }
+    finally { Write-ProbeResult -Result $setup -Path $setupPath }
     Invoke-ProbeRunB -Ctx $ctx | Out-Null
   }
   catch {
