@@ -1,4 +1,5 @@
 Set-StrictMode -Version 2.0
+Import-Module (Join-Path $PSScriptRoot 'ProbeCommon.psm1')
 Import-Module (Join-Path $PSScriptRoot 'ProbeSecret.psm1')
 
 function Test-ProbeElevated {
@@ -125,4 +126,91 @@ function Invoke-ProbeRunB {
   }
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunB
+$script:LogonTypeNotGranted = [uint32]2147943785
+$script:TaskNeverRunOrRunning = @([uint32]267009, [uint32]267011)
+
+function Get-ProbeBatchRight {
+  param([Parameter(Mandatory)][string]$Sid)
+  @([AcProbe.Native]::AccountRights($Sid)) -contains 'SeBatchLogonRight'
+}
+
+function Add-ProbeBatchRight {
+  param([Parameter(Mandatory)][string]$Sid)
+  $code = [AcProbe.Native]::AddRight($Sid, 'SeBatchLogonRight')
+  if ($code -ne 0) { throw "AddRight failed with Win32 error $code" }
+}
+
+function Add-ProbeManifestGrant {
+  param([Parameter(Mandatory)]$Ctx, [Parameter(Mandatory)][string]$Sid, [Parameter(Mandatory)][string]$Right)
+  $manifest = Get-Content -LiteralPath $Ctx.ManifestPath -Raw | ConvertFrom-Json
+  $grants = @()
+  if ($manifest.PSObject.Properties['granted_rights']) { $grants = @($manifest.granted_rights) }
+  $grants += [pscustomobject]@{ sid = $Sid; right = $Right }
+  $manifest | Add-Member -NotePropertyName granted_rights -NotePropertyValue $grants -Force
+  $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Ctx.ManifestPath -Encoding UTF8
+}
+
+function Wait-ProbeRunA {
+  param([Parameter(Mandatory)]$Ctx, [Parameter(Mandatory)][string]$TaskName)
+  $resultsFile = Join-Path $Ctx.ResultsDir 'results-A.json'
+  $deadline = (Get-Date).AddMilliseconds($script:RunTimeoutMs)
+  while ($true) {
+    if (Test-Path -LiteralPath $resultsFile) { return 'done' }
+    $task = Get-ScheduledTask -TaskName $TaskName
+    $last = [uint32](Get-ScheduledTaskInfo -TaskName $TaskName).LastTaskResult
+    if ($task.State -ne 'Running' -and $script:TaskNeverRunOrRunning -notcontains $last) {
+      if ($last -eq 0) { return 'done' }
+      if ($last -eq $script:LogonTypeNotGranted) { return 'logon_failed' }
+      return 'failed'
+    }
+    if ((Get-Date) -gt $deadline) {
+      Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+      return 'timeout'
+    }
+    Start-Sleep -Seconds 2
+  }
+}
+
+function Invoke-ProbeRunAAttempt {
+  param([Parameter(Mandatory)]$Ctx)
+  $taskName = 'ac-probe-ctl-runA'
+  $pipe = New-ProbeSecretPipe -AllowedSid $Ctx.CtlSid -Secret $Ctx.AgentPassword
+  try {
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (Get-ProbeHarnessArguments -Ctx $Ctx -Run 'A' -PipeName $pipe.Name)
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+    Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -User $Ctx.CtlName `
+      -Password (ConvertFrom-ProbeSecureString $Ctx.CtlPassword) -RunLevel Limited | Out-Null
+    $afterRegister = Get-ProbeBatchRight -Sid $Ctx.CtlSid
+    Start-ScheduledTask -TaskName $taskName
+    [pscustomobject]@{ State = (Wait-ProbeRunA -Ctx $Ctx -TaskName $taskName); BatchAfterRegister = $afterRegister }
+  }
+  finally {
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    if ($pipe.Job) { Remove-Job -Job $pipe.Job -Force -ErrorAction SilentlyContinue }
+  }
+}
+
+function Invoke-ProbeRunA {
+  <# Runs the harness as ctl from a scheduled task, granting the batch right once if logon was refused. #>
+  param([Parameter(Mandatory)]$Ctx)
+  $batchBefore = [bool](Get-ProbeBatchRight -Sid $Ctx.CtlSid)
+  $neededGrant = $false
+  $attempt = Invoke-ProbeRunAAttempt -Ctx $Ctx
+  $afterRegister = [bool]$attempt.BatchAfterRegister
+  if ($attempt.State -eq 'logon_failed' -and -not $batchBefore) {
+    Add-ProbeBatchRight -Sid $Ctx.CtlSid
+    Add-ProbeManifestGrant -Ctx $Ctx -Sid $Ctx.CtlSid -Right 'SeBatchLogonRight'
+    $neededGrant = $true
+    $attempt = Invoke-ProbeRunAAttempt -Ctx $Ctx
+  }
+  $outcome = switch ($attempt.State) { 'done' { 'done' } 'timeout' { 'timeout' } default { 'start_failed' } }
+  [pscustomobject]@{
+    Outcome            = $outcome
+    BatchBefore        = $batchBefore
+    BatchAfterRegister = $afterRegister
+    NeededGrant        = $neededGrant
+    StrayAfterRun      = @(Get-ProbeStrayProcess -Sids @($Ctx.CtlSid, $Ctx.AgentSid))
+  }
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB

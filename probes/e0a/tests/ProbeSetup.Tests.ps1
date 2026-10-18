@@ -154,8 +154,6 @@ Describe 'Invoke-ProbeRunA' {
     Mock -ModuleName ProbeSetup Get-ProbeStrayProcess { @() }
     Mock -ModuleName ProbeSetup Start-Sleep {}
     Mock -ModuleName ProbeSetup Test-Path { $false }
-    Mock -ModuleName ProbeSetup New-ScheduledTaskAction { 'action' }
-    Mock -ModuleName ProbeSetup New-ScheduledTaskSettingsSet { 'settings' }
     Mock -ModuleName ProbeSetup Register-ScheduledTask {}
     Mock -ModuleName ProbeSetup Start-ScheduledTask {}
     Mock -ModuleName ProbeSetup Stop-ScheduledTask {}
@@ -173,14 +171,14 @@ Describe 'Invoke-ProbeRunA' {
     $r.BatchBefore | Should Be $true
     $r.NeededGrant | Should Be $false
     Assert-MockCalled -ModuleName ProbeSetup Register-ScheduledTask -Times 1 -ParameterFilter {
-      $TaskName -eq 'ac-probe-ctl-runA' -and $User -eq 'ac-probe-ctl' -and $RunLevel -eq 'Limited' -and $Password.Length -eq 43 -or $Password.Length -gt 0 }
-    Assert-MockCalled -ModuleName ProbeSetup New-ScheduledTaskSettingsSet -Times 1 -ParameterFilter { $ExecutionTimeLimit -eq (New-TimeSpan -Minutes 5) }
+      $TaskName -eq 'ac-probe-ctl-runA' -and $User -eq 'ac-probe-ctl' -and $RunLevel -eq 'Limited' -and ($Password -is [string]) -and $Password.Length -gt 0 }
+    Assert-MockCalled -ModuleName ProbeSetup Register-ScheduledTask -Times 1 -ParameterFilter { $Settings.ExecutionTimeLimit -eq 'PT5M' }
     Assert-MockCalled -ModuleName ProbeSetup Unregister-ScheduledTask -Times 1
-    Assert-MockCalled -ModuleName ProbeSetup Add-ProbeBatchRight -Times 0
+    Assert-MockCalled -ModuleName ProbeSetup Add-ProbeBatchRight -Times 0 -Scope It
   }
   It 'grants batch right once and retries after a logon-type failure' {
     $global:probeInfoQueue.Enqueue(2147943785); $global:probeInfoQueue.Enqueue(0)
-    $global:probeBatchQueue.Enqueue($false); $global:probeBatchQueue.Enqueue($false)
+    $global:probeBatchQueue.Enqueue($false); $global:probeBatchQueue.Enqueue($false); $global:probeBatchQueue.Enqueue($false)
     $r = Invoke-ProbeRunA -Ctx (New-TestCtx)
     $r.Outcome | Should Be 'done'
     $r.BatchBefore | Should Be $false
@@ -196,7 +194,7 @@ Describe 'Invoke-ProbeRunA' {
     $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
     $r = Invoke-ProbeRunA -Ctx (New-TestCtx)
     $r.Outcome | Should Be 'start_failed'
-    Assert-MockCalled -ModuleName ProbeSetup Add-ProbeBatchRight -Times 0
+    Assert-MockCalled -ModuleName ProbeSetup Add-ProbeBatchRight -Times 0 -Scope It
   }
   It 'reports timeout and stops the task when it never finishes' {
     Mock -ModuleName ProbeSetup Get-ScheduledTask { [pscustomobject]@{ State = 'Running' } }
