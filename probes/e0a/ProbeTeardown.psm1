@@ -53,13 +53,18 @@ function Remove-ProbeTask {
 }
 
 function Revoke-ProbeRight {
-  param([string]$ResultsRoot)
+  param([string]$ResultsRoot, [string[]]$Sids)
+  $pairs = [ordered]@{}
+  foreach ($s in @($Sids)) {
+    if ($s) { $pairs["$s|SeBatchLogonRight"] = @{ Sid = [string]$s; Right = 'SeBatchLogonRight' } }
+  }
   foreach ($m in (Get-ProbeManifest -ResultsRoot $ResultsRoot)) {
     if (-not $m.PSObject.Properties['granted_rights']) { continue }
     foreach ($g in @($m.granted_rights)) {
-      if ($g.sid -and $g.right) { [void](Remove-ProbeRight -Sid ([string]$g.sid) -Right ([string]$g.right)) }
+      if ($g.sid -and $g.right) { $pairs["$($g.sid)|$($g.right)"] = @{ Sid = [string]$g.sid; Right = [string]$g.right } }
     }
   }
+  foreach ($p in $pairs.Values) { [void](Remove-ProbeRight -Sid $p.Sid -Right $p.Right) }
 }
 
 function Remove-ProbeProfileInstance {
@@ -134,7 +139,7 @@ function Invoke-ProbeTeardown {
 
   & $record 'StopProcesses' { Stop-ProbeProcess -Sids $sids }
   & $record 'RemoveTasks' { Remove-ProbeTask }
-  & $record 'RevokeRights' { Revoke-ProbeRight -ResultsRoot $ResultsRoot }
+  & $record 'RevokeRights' { Revoke-ProbeRight -ResultsRoot $ResultsRoot -Sids $sids }
   & $record 'DeleteProfiles' { Remove-ProbeProfile -Sids $sids }
   & $record 'RemoveAccounts' { Remove-ProbeAccount }
   & $record 'RemoveProbeDir' { Remove-ProbeDirectory }
