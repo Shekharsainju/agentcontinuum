@@ -70,8 +70,8 @@ function New-ProbeAccount {
 }
 
 $script:RunTimeoutMs = 300000
-$script:ResultsRoot = 'C:ProgramDatac-probe-results'
-$script:ProbeRoot = 'C:ProgramDatac-probe'
+$script:ResultsRoot = 'C:\ProgramData\ac-probe-results'
+$script:ProbeRoot = 'C:\ProgramData\ac-probe'
 $script:ProbeSourceDir = $PSScriptRoot
 
 function Get-ProbeHarnessArguments {
@@ -258,6 +258,7 @@ function Start-E0aProbe {
   }
 
   $exitCode = 0
+  $ctx = $null
   try {
     New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
     $ctlPassword = New-ProbePassword
@@ -314,6 +315,19 @@ function Start-E0aProbe {
     $exitCode = 1
   }
   finally {
+    if ($ctx) {
+      try {
+        $scan = Test-SecretAbsent -Paths @($ctx.BinDir, $resultsDir, $script:ProbeRoot) `
+          -Secrets @((ConvertFrom-ProbeSecureString $ctx.CtlPassword), (ConvertFrom-ProbeSecureString $ctx.AgentPassword))
+        $s1Outcome = if ($scan.Clean) { 'pass' } else { 'fail' }
+        Add-ProbeCheck -Result $setup -Id 'S1' -Name 'secret_absent_on_disk' -Outcome $s1Outcome -Details @{
+          hits = @($scan.Hits); unscanned = @($scan.Unscanned) }
+      }
+      catch {
+        Add-ProbeCheck -Result $setup -Id 'S1' -Name 'secret_absent_on_disk' -Outcome 'error' -Details @{ error = $_.Exception.Message }
+      }
+      Write-ProbeResult -Result $setup -Path $setupPath
+    }
     Invoke-ProbeTeardown | Out-Null
   }
   Write-Host "results: $resultsDir"
