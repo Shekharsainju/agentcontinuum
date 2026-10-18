@@ -8,6 +8,11 @@ function Remove-ProbeRight {
   [AcProbe.Native]::RemoveRight($Sid, $Right)
 }
 
+function Get-ProbeAccountRight {
+  param([Parameter(Mandatory)][string]$Sid)
+  @([AcProbe.Native]::AccountRights($Sid))
+}
+
 function Get-ProbeProfileListSid {
   @(Get-ChildItem -LiteralPath $script:ProfileListKey -ErrorAction SilentlyContinue |
     ForEach-Object { Split-Path -Leaf $_.Name })
@@ -149,4 +154,4 @@ function Invoke-ProbeTeardown {
   [pscustomobject]@{ Steps = $steps.ToArray() }
 }
 
-Export-ModuleMember -Function Invoke-ProbeTeardown, Remove-ProbeRight
+Export-ModuleMember -Function Invoke-ProbeTeardown, Remove-ProbeRight, Get-ProbeAccountRight
