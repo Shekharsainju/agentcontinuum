@@ -292,7 +292,7 @@ function Start-E0aProbe {
     $agentBatchRight = [bool](Get-ProbeBatchRight -Sid $agentSid)
     try {
       $runA = Invoke-ProbeRunA -Ctx $ctx
-      $s0Outcome = if ($runA.NeededGrant) { 'finding' } else { 'pass' }
+      $s0Outcome = if ($runA.NeededGrant -or $runA.Outcome -ne 'done') { 'finding' } else { 'pass' }
       Add-ProbeCheck -Result $setup -Id 'S0' -Name 'ctl_batch_logon_right' -Outcome $s0Outcome -Details @{
         ctl_batch_before         = $runA.BatchBefore
         ctl_batch_after_register = $runA.BatchAfterRegister
@@ -308,7 +308,12 @@ function Start-E0aProbe {
       throw
     }
     finally { Write-ProbeResult -Result $setup -Path $setupPath }
-    Invoke-ProbeRunB -Ctx $ctx | Out-Null
+    $runB = Invoke-ProbeRunB -Ctx $ctx
+    $s0 = @($setup.checks) | Where-Object { $_.id -eq 'S0' }
+    $s0.details.run_b_outcome = $runB.Outcome
+    $s0.details.run_b_stray_pids = @($runB.StrayAfterRun)
+    if ($runB.Outcome -ne 'done') { $s0.result = 'finding' }
+    Write-ProbeResult -Result $setup -Path $setupPath
   }
   catch {
     Write-Host "probe failed: $($_.Exception.Message)"
