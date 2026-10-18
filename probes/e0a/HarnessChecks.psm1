@@ -90,7 +90,7 @@ function Invoke-C3FreezeThaw {
     if (-not [AcProbe.Native]::Assign($job, $proc.Process)) { throw "assign failed, Win32Error=$([AcProbe.Native]::LastError)" }
     [void][AcProbe.Native]::Resume($proc.Thread)
 
-    # Wait for the first heartbeat before freezing -- child process startup time (new
+    # Wait for the first heartbeat before freezing, because child process startup time (new
     # powershell.exe + module load) is variable, so this must not race ahead regardless.
     $deadline0 = [datetime]::UtcNow.AddSeconds(15)
     while ((@(Read-Heartbeat $beatPath)).Count -eq 0 -and [datetime]::UtcNow -lt $deadline0) { Start-Sleep -Milliseconds 100 }
@@ -311,7 +311,7 @@ function Invoke-C6Breakaway {
     if ($b.PSObject.Properties['creation']) { $details['grandchild_creation'] = $b.creation }
 
     if (-not $b.ok) {
-      $outcome = 'pass'   # breakaway was rejected -- can't escape the job.
+      $outcome = 'pass'   # breakaway was rejected, so it cannot escape the job.
     }
     else {
       $pids = [AcProbe.Native]::JobPids($job)
