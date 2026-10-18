@@ -47,3 +47,27 @@ Describe 'Get-ProbeAclSpec' {
     ($s['C:\ProgramData\ac-probe\bin'] | Where-Object Sid -eq 'S-A').Rights | Should Be 'ReadAndExecute'
   }
 }
+
+Describe 'Set-ProbeFolders' {
+  BeforeEach {
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup Set-Acl {}
+  }
+  $spec = @{
+    'C:\ProgramData\ac-probe\ctl' = @(@{ Sid = 'S-1-5-32-544'; Rights = 'FullControl' }, @{ Sid = 'S-1-5-32-545'; Rights = 'Modify' })
+    'C:\ProgramData\ac-probe'     = @(@{ Sid = 'S-1-5-32-544'; Rights = 'FullControl' })
+  }
+  It 'creates and protects every folder with no inherited rules' {
+    Set-ProbeFolders -Spec $spec
+    Assert-MockCalled -ModuleName ProbeSetup New-Item -Times 2
+    Assert-MockCalled -ModuleName ProbeSetup Set-Acl -Times 2 -ParameterFilter { $AclObject.AreAccessRulesProtected }
+    Assert-MockCalled -ModuleName ProbeSetup Set-Acl -Times 1 -ParameterFilter {
+      $LiteralPath -eq 'C:\ProgramData\ac-probe\ctl' -and $AclObject.Access.Count -eq 2 }
+  }
+  It 'applies parents before children' {
+    $script:order = @()
+    Mock -ModuleName ProbeSetup Set-Acl { $script:order += $LiteralPath }
+    Set-ProbeFolders -Spec $spec
+    $script:order[0] | Should Be 'C:\ProgramData\ac-probe'
+  }
+}
