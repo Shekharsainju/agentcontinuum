@@ -297,3 +297,48 @@ Describe 'Start-E0aProbe setup.json C1' {
       $Path -like '*\setup.json' -and (@($Result.checks) | Where-Object { $_.id -eq 'C1' }).result -eq 'pass' }
   }
 }
+
+Describe 'Start-E0aProbe setup.json S0' {
+  BeforeEach {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult {}
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Test-SecretAbsent { [pscustomobject]@{ Clean = $true; Hits = @(); Unscanned = @() } }
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $global:probeRunA = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $false; BatchAfterRegister = $false; NeededGrant = $true; StrayAfterRun = @() }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunA }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunA }
+  }
+  It 'records the ctl batch right before, after register and whether a grant was needed' {
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $s0 = @($Result.checks) | Where-Object { $_.id -eq 'S0' }
+      $s0 -and $s0.result -eq 'finding' -and $s0.details.ctl_batch_before -eq $false -and
+      $s0.details.ctl_batch_after_register -eq $false -and $s0.details.needed_grant -eq $true }
+  }
+  It 'passes S0 when no grant was needed' {
+    $global:probeRunA = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      (@($Result.checks) | Where-Object { $_.id -eq 'S0' }).result -eq 'pass' }
+  }
+  It 'records S0 error when run A throws' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { throw 'boom' }
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      (@($Result.checks) | Where-Object { $_.id -eq 'S0' }).result -eq 'error' }
+  }
+  It 'records whether the agent already holds the batch right' {
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      (@($Result.checks) | Where-Object { $_.id -eq 'S0' }).details.agent_batch_right -eq $false }
+  }
+}
