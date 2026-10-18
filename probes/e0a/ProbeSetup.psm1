@@ -17,4 +17,21 @@ function Test-ProbePrecheck {
   }
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck
+function Get-ProbeAclSpec {
+  <# Maps each probe folder to its allowed SIDs and rights. #>
+  param(
+    [Parameter(Mandatory)][string]$ReaderSid,
+    [Parameter(Mandatory)][string]$CtlSid,
+    [Parameter(Mandatory)][string]$AgentSid
+  )
+  $admins = @{ Sid = 'S-1-5-32-544'; Rights = 'FullControl' }
+  @{
+    'C:\ProgramData\ac-probe'          = @($admins, @{ Sid = $CtlSid; Rights = 'ReadAndExecute' }, @{ Sid = $AgentSid; Rights = 'ReadAndExecute' })
+    'C:\ProgramData\ac-probe\bin'      = @($admins, @{ Sid = $CtlSid; Rights = 'ReadAndExecute' }, @{ Sid = $AgentSid; Rights = 'ReadAndExecute' })
+    'C:\ProgramData\ac-probe\ctl'      = @($admins, @{ Sid = $CtlSid; Rights = 'Modify' })
+    'C:\ProgramData\ac-probe\exchange' = @($admins, @{ Sid = $AgentSid; Rights = 'Modify' }, @{ Sid = $CtlSid; Rights = 'Read' })
+    'C:\ProgramData\ac-probe-results'  = @($admins, @{ Sid = $CtlSid; Rights = 'Modify' }, @{ Sid = $ReaderSid; Rights = 'ReadAndExecute' })
+  }
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec
