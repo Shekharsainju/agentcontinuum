@@ -189,6 +189,15 @@ Describe 'Invoke-ProbeRunA' {
     Assert-MockCalled -ModuleName ProbeSetup Start-ScheduledTask -Times 2
     Assert-MockCalled -ModuleName ProbeSetup Unregister-ScheduledTask -Times 2
   }
+  It 'records the grant in the manifest before granting the batch right' {
+    $global:probeGrantOrder = @()
+    Mock -ModuleName ProbeSetup Add-ProbeManifestGrant { $global:probeGrantOrder += 'manifest' }
+    Mock -ModuleName ProbeSetup Add-ProbeBatchRight { $global:probeGrantOrder += 'right' }
+    $global:probeInfoQueue.Enqueue(2147943785); $global:probeInfoQueue.Enqueue(0)
+    $global:probeBatchQueue.Enqueue($false); $global:probeBatchQueue.Enqueue($false); $global:probeBatchQueue.Enqueue($false)
+    Invoke-ProbeRunA -Ctx (New-TestCtx) | Out-Null
+    ($global:probeGrantOrder -join ',') | Should Be 'manifest,right'
+  }
   It 'does not grant when ctl already held the right' {
     $global:probeInfoQueue.Enqueue(2147943785)
     $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
