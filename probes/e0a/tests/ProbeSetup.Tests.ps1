@@ -434,3 +434,13 @@ Describe 'Start-E0aProbe setup.json T0' {
     $global:probeWrites[-1] | Should Be 'C1,S0,S1,T0'
   }
 }
+
+Describe 'Get-ProbeAclSpec ctl folder' {
+  $s = Get-ProbeAclSpec -ReaderSid 'S-R' -CtlSid 'S-C' -AgentSid 'S-A'
+  It 'gives ctl full control of its own folder' {
+    ($s['C:\ProgramData\ac-probe\ctl'] | Where-Object Sid -eq 'S-C').Rights | Should Be 'FullControl'
+  }
+  It 'still gives agent nothing on the ctl folder' {
+    ($s['C:\ProgramData\ac-probe\ctl'].Sid -contains 'S-A') | Should Be $false
+  }
+}
