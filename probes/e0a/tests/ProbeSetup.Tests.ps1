@@ -65,9 +65,9 @@ Describe 'Set-ProbeFolders' {
       $LiteralPath -eq 'C:\ProgramData\ac-probe\ctl' -and $AclObject.Access.Count -eq 2 }
   }
   It 'applies parents before children' {
-    $script:order = @()
-    Mock -ModuleName ProbeSetup Set-Acl { $script:order += $LiteralPath }
+    $global:probeApplyOrder = @()
+    Mock -ModuleName ProbeSetup Set-Acl { $global:probeApplyOrder += $LiteralPath }
     Set-ProbeFolders -Spec $spec
-    $script:order[0] | Should Be 'C:\ProgramData\ac-probe'
+    $global:probeApplyOrder[0] | Should Be 'C:\ProgramData\ac-probe'
   }
 }

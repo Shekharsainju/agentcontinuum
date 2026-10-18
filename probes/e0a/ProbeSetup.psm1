@@ -34,4 +34,23 @@ function Get-ProbeAclSpec {
   }
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec
+function Set-ProbeFolders {
+  <# Creates each folder and applies its spec with inheritance disabled and no inherited rules kept. #>
+  param([Parameter(Mandatory)][hashtable]$Spec)
+  $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
+  $none = [Security.AccessControl.PropagationFlags]::None
+  $allow = [Security.AccessControl.AccessControlType]::Allow
+  foreach ($path in ($Spec.Keys | Sort-Object { $_.Length })) {
+    New-Item -ItemType Directory -Force -Path $path | Out-Null
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($entry in $Spec[$path]) {
+      $sid = New-Object Security.Principal.SecurityIdentifier($entry.Sid)
+      $rights = [Security.AccessControl.FileSystemRights]$entry.Rights
+      $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, $rights, $inherit, $none, $allow)))
+    }
+    Set-Acl -LiteralPath $path -AclObject $acl
+  }
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders
