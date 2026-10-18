@@ -1,5 +1,14 @@
 Import-Module "$PSScriptRoot\..\ProbeTeardown.psm1" -Force
 
+Import-Module "$PSScriptRoot\..\ProbeNative.psm1" -Force
+
+Describe 'Get-ProbeAccountRight' {
+  It 'returns an empty array for a malformed SID without throwing' {
+    Import-ProbeNative | Out-Null
+    @(Get-ProbeAccountRight -Sid 'not-a-sid').Count | Should Be 0
+  }
+}
+
 Describe 'Invoke-ProbeTeardown' {
   BeforeEach {
     Mock -ModuleName ProbeTeardown Get-LocalUser { }
