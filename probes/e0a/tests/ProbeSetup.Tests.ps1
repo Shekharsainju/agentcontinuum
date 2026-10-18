@@ -99,7 +99,7 @@ function New-TestCtx {
   }
 }
 
-function New-FakeProcess([bool]$Exits) {
+function global:New-FakeProcess([bool]$Exits) {
   $p = [pscustomobject]@{ Killed = $false; ExitCode = 0; Exits = $Exits }
   $p | Add-Member ScriptMethod WaitForExit { param($ms) $this.Exits }
   $p | Add-Member ScriptMethod Kill { $this.Killed = $true }

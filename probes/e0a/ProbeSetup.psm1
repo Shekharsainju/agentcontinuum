@@ -1,4 +1,5 @@
 Set-StrictMode -Version 2.0
+Import-Module (Join-Path $PSScriptRoot 'ProbeSecret.psm1')
 
 function Test-ProbeElevated {
   $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -65,4 +66,63 @@ function New-ProbeAccount {
   [string]$user.SID.Value
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount
+$script:RunTimeoutMs = 300000
+
+function Get-ProbeHarnessArguments {
+  param([Parameter(Mandatory)]$Ctx, [Parameter(Mandatory)][string]$Run, [Parameter(Mandatory)][string]$PipeName)
+  $harness = Join-Path $Ctx.BinDir 'Harness.ps1'
+  '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -Run {1} -OutDir "{2}" -Exchange "{3}" -BinDir "{4}" -CtlDir "{5}" -ResultsDir "{6}" -PipeName {7}' -f
+    $harness, $Run, $Ctx.ResultsDir, $Ctx.ExchangeDir, $Ctx.BinDir, $Ctx.CtlDir, $Ctx.ResultsRoot, $PipeName
+}
+
+function Get-ProbeStrayProcess {
+  param([Parameter(Mandatory)][string[]]$Sids)
+  @(Get-CimInstance -ClassName Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+      $owner = $null
+      try { $owner = (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid } catch {}
+      $owner -and ($Sids -contains $owner)
+    } | ForEach-Object { [int]$_.ProcessId })
+}
+
+function Start-ProbeProcess {
+  param([Parameter(Mandatory)][Diagnostics.ProcessStartInfo]$StartInfo)
+  [Diagnostics.Process]::Start($StartInfo)
+}
+
+function Invoke-ProbeRunB {
+  <# Runs the harness as ctl through Secondary Logon and waits up to five minutes. #>
+  param([Parameter(Mandatory)]$Ctx)
+  $pipe = New-ProbeSecretPipe -AllowedSid $Ctx.CtlSid -Secret $Ctx.AgentPassword
+  $outcome = 'done'
+  try {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = 'powershell.exe'
+    $psi.Arguments = Get-ProbeHarnessArguments -Ctx $Ctx -Run 'B' -PipeName $pipe.Name
+    $psi.UserName = $Ctx.CtlName
+    $psi.Password = $Ctx.CtlPassword
+    $psi.Domain = '.'
+    $psi.LoadUserProfile = $true
+    $psi.UseShellExecute = $false
+    $psi.WorkingDirectory = $Ctx.BinDir
+    try {
+      $proc = Start-ProbeProcess -StartInfo $psi
+      if (-not $proc.WaitForExit($script:RunTimeoutMs)) {
+        $outcome = 'timeout'
+        try { $proc.Kill() } catch {}
+      }
+    }
+    catch { $outcome = 'start_failed' }
+  }
+  finally {
+    if ($pipe.Job) { Remove-Job -Job $pipe.Job -Force -ErrorAction SilentlyContinue }
+  }
+  [pscustomobject]@{
+    Outcome            = $outcome
+    BatchBefore        = $false
+    BatchAfterRegister = $false
+    NeededGrant        = $false
+    StrayAfterRun      = @(Get-ProbeStrayProcess -Sids @($Ctx.CtlSid, $Ctx.AgentSid))
+  }
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunB
