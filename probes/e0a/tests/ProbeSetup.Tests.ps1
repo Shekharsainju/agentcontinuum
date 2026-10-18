@@ -78,6 +78,6 @@ Describe 'New-ProbeAccount' {
     Mock -ModuleName ProbeSetup Add-LocalGroupMember {}
     New-ProbeAccount 'ac-probe-ctl' (New-ProbePassword) | Should Be 'S-X'
     Assert-MockCalled -ModuleName ProbeSetup New-LocalUser -ParameterFilter { $Description -eq 'AgentContinuum E0a probe - safe to delete' -and $PasswordNeverExpires -and $UserMayNotChangePassword }
-    Assert-MockCalled -ModuleName ProbeSetup Add-LocalGroupMember -Times 1 -ParameterFilter { $SID -eq 'S-1-5-32-545' -and $Member -eq 'ac-probe-ctl' }
+    Assert-MockCalled -ModuleName ProbeSetup Add-LocalGroupMember -Times 1 -ParameterFilter { $SID -eq 'S-1-5-32-545' -and "$Member" -eq 'ac-probe-ctl' }
   }
 }

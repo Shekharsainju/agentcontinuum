@@ -53,4 +53,16 @@ function Set-ProbeFolders {
   }
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders
+function New-ProbeAccount {
+  <# Creates a standard local user and returns its SID string. #>
+  param(
+    [Parameter(Mandatory, Position = 0)][string]$Name,
+    [Parameter(Mandatory, Position = 1)][securestring]$Password
+  )
+  $user = New-LocalUser -Name $Name -Password $Password -Description 'AgentContinuum E0a probe - safe to delete' `
+    -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires
+  Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $Name
+  [string]$user.SID.Value
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount
