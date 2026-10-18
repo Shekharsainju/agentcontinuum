@@ -1,6 +1,6 @@
 # SubHarness.ps1 - started by Harness.ps1 (C5) to prove kill-on-job-close across a process
 # boundary. Creates its own kill-on-close job, starts a grandchild child under it, prints
-# "CHILD <pid> <creationFileTime>" on stdout, then sleeps -- holding the job handle open for
+# "CHILD <pid> <creationFileTime>" on stdout, then sleeps, holding the job handle open for
 # the lifetime of this process. When the harness kills this process (KillPid), Windows closes
 # all of this process's handles, including the job's last handle, which triggers
 # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE and kills the grandchild.
