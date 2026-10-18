@@ -123,6 +123,9 @@ function Assert-ProbeGone {
   if ($profiles.Count -gt 0) { $remnants += 'profile' }
   $regSids = @(Get-ProbeProfileListSid)
   if (@($regSids | Where-Object { $Sids -contains $_ }).Count -gt 0) { $remnants += 'profilelist' }
+  foreach ($s in @($Sids)) {
+    if (@(Get-ProbeAccountRight -Sid $s).Count -gt 0) { $remnants += 'rights'; break }
+  }
   if ($remnants.Count -gt 0) { throw "probe remnants remain: $($remnants -join ',')" }
 }
 
