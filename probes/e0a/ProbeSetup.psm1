@@ -343,7 +343,7 @@ function Start-E0aProbe {
       }
       Write-ProbeResult -Result $setup -Path $setupPath
     }
-    $finalTeardown = Invoke-ProbeTeardown
+    $finalTeardown = Invoke-ProbeFinalTeardown
   }
 
   $verify = $finalTeardown.Steps | Where-Object { $_.Name -eq 'Verify' }
