@@ -1,6 +1,8 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'ProbeCommon.psm1')
+Import-Module (Join-Path $PSScriptRoot 'ProbeNative.psm1')
 Import-Module (Join-Path $PSScriptRoot 'ProbeSecret.psm1')
+Import-Module (Join-Path $PSScriptRoot 'ProbeTeardown.psm1')
 
 function Test-ProbeElevated {
   $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -68,6 +70,9 @@ function New-ProbeAccount {
 }
 
 $script:RunTimeoutMs = 300000
+$script:ResultsRoot = 'C:ProgramDatac-probe-results'
+$script:ProbeRoot = 'C:ProgramDatac-probe'
+$script:ProbeSourceDir = $PSScriptRoot
 
 function Get-ProbeHarnessArguments {
   param([Parameter(Mandatory)]$Ctx, [Parameter(Mandatory)][string]$Run, [Parameter(Mandatory)][string]$PipeName)
@@ -213,4 +218,76 @@ function Invoke-ProbeRunA {
   }
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB
+function Resolve-ProbeAccountSid {
+  param([string]$Name)
+  if (-not $Name) { return [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
+  (New-Object Security.Principal.NTAccount($Name)).Translate([Security.Principal.SecurityIdentifier]).Value
+}
+
+function Copy-ProbeBinaries {
+  param([Parameter(Mandatory)][string]$Destination)
+  Get-ChildItem -LiteralPath $script:ProbeSourceDir -File |
+    Where-Object { $_.Name -notin 'ProbeSetup.psm1', 'Invoke-E0aProbe.ps1' } |
+    Copy-Item -Destination $Destination
+}
+
+function Start-E0aProbe {
+  <# Creates the probe accounts, runs A and B, and always tears down. Returns the process exit code. #>
+  [CmdletBinding()]
+  param([string]$ReaderAccount)
+
+  if (-not (Test-ProbePrecheck).Ok) { return 2 }
+  if (-not (Import-ProbeNative).Loaded) { Write-Host 'native helper failed to load'; return 3 }
+
+  $preClean = Invoke-ProbeTeardown
+  if (-not ($preClean.Steps | Where-Object { $_.Name -eq 'Verify' }).Ok) {
+    Write-Host 'pre-clean could not verify a clean system, aborting'
+    return 4
+  }
+
+  $resultsDir = Join-Path $script:ResultsRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+  $exitCode = 0
+  try {
+    New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
+    $ctlPassword = New-ProbePassword
+    $agentPassword = New-ProbePassword
+    $ctlSid = New-ProbeAccount -Name 'ac-probe-ctl' -Password $ctlPassword
+    $agentSid = New-ProbeAccount -Name 'ac-probe-agent' -Password $agentPassword
+    $manifestPath = Join-Path $resultsDir 'manifest.json'
+    [ordered]@{ ctl_sid = $ctlSid; agent_sid = $agentSid; granted_rights = @() } |
+      ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+    $readerSid = Resolve-ProbeAccountSid -Name $ReaderAccount
+    Set-ProbeFolders -Spec (Get-ProbeAclSpec -ReaderSid $readerSid -CtlSid $ctlSid -AgentSid $agentSid)
+    $binDir = Join-Path $script:ProbeRoot 'bin'
+    Copy-ProbeBinaries -Destination $binDir
+
+    $ctx = [pscustomobject]@{
+      ResultsRoot   = $script:ResultsRoot
+      ResultsDir    = $resultsDir
+      ManifestPath  = $manifestPath
+      BinDir        = $binDir
+      CtlDir        = Join-Path $script:ProbeRoot 'ctl'
+      ExchangeDir   = Join-Path $script:ProbeRoot 'exchange'
+      CtlName       = 'ac-probe-ctl'
+      AgentName     = 'ac-probe-agent'
+      CtlSid        = $ctlSid
+      AgentSid      = $agentSid
+      CtlPassword   = $ctlPassword
+      AgentPassword = $agentPassword
+    }
+    Invoke-ProbeRunA -Ctx $ctx | Out-Null
+    Invoke-ProbeRunB -Ctx $ctx | Out-Null
+  }
+  catch {
+    Write-Host "probe failed: $($_.Exception.Message)"
+    $exitCode = 1
+  }
+  finally {
+    Invoke-ProbeTeardown | Out-Null
+  }
+  Write-Host "results: $resultsDir"
+  $exitCode
+}
+
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB, Start-E0aProbe
