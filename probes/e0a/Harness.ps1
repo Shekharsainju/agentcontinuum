@@ -1,6 +1,6 @@
 # Harness.ps1 - E0a probe harness. Self mode runs C3-C6 as the current standard user, with the
-# child started by plain CreateProcess (no accounts, no elevation). A/B modes (later task) will
-# additionally run C2, C7, C8 under ac-agent via Ctx.Launch backed by CreateProcessWithLogonW.
+# child started by plain CreateProcess (no accounts, no elevation). A/B modes also run C2, C7, C8
+# under ac-agent via Ctx.Launch backed by CreateProcessWithLogonW.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory)][ValidateSet('A', 'B', 'self')][string]$Run,
