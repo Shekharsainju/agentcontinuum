@@ -203,8 +203,8 @@ function Invoke-ProbeRunA {
   $attempt = Invoke-ProbeRunAAttempt -Ctx $Ctx
   $afterRegister = [bool]$attempt.BatchAfterRegister
   if ($attempt.State -eq 'logon_failed' -and -not $batchBefore) {
-    Add-ProbeBatchRight -Sid $Ctx.CtlSid
     Add-ProbeManifestGrant -Ctx $Ctx -Sid $Ctx.CtlSid -Right 'SeBatchLogonRight'
+    Add-ProbeBatchRight -Sid $Ctx.CtlSid
     $neededGrant = $true
     $attempt = Invoke-ProbeRunAAttempt -Ctx $Ctx
   }
