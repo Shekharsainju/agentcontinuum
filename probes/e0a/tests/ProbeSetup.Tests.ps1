@@ -212,3 +212,56 @@ Describe 'Invoke-ProbeRunA' {
     (Invoke-ProbeRunA -Ctx (New-TestCtx)).Outcome | Should Be 'done'
   }
 }
+
+Describe 'Start-E0aProbe' {
+  BeforeEach {
+    $global:probeVerifyOk = $true
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $global:probeVerifyOk; Error = '' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult {}
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Test-SecretAbsent { [pscustomobject]@{ Clean = $true; Hits = @(); Unscanned = @() } }
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $ok = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    $global:probeRunOk = $ok
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunOk }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunOk }
+  }
+  It 'exits 2 without touching the system when precheck fails' {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $false; Elevated = $false; SeclogonStatus = 'Stopped' } }
+    Start-E0aProbe | Should Be 2
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeTeardown -Times 0
+    Assert-MockCalled -ModuleName ProbeSetup New-ProbeAccount -Times 0
+  }
+  It 'aborts before creating accounts when pre-clean cannot verify' {
+    $global:probeVerifyOk = $false
+    Start-E0aProbe | Should Not Be 0
+    Assert-MockCalled -ModuleName ProbeSetup New-ProbeAccount -Times 0
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeRunA -Times 0
+  }
+  It 'always tears down when run A throws and skips run B' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { throw 'boom' }
+    Start-E0aProbe | Should Not Be 0
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeTeardown -Times 2
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeRunB -Times 0
+  }
+  It 'runs A then B then tears down on the happy path' {
+    Start-E0aProbe | Should Be 0
+    Assert-MockCalled -ModuleName ProbeSetup New-ProbeAccount -Times 2
+    Assert-MockCalled -ModuleName ProbeSetup Set-ProbeFolders -Times 1
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeRunA -Times 1
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeRunB -Times 1
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeTeardown -Times 2
+  }
+  It 'passes the reader account through to SID resolution' {
+    Start-E0aProbe -ReaderAccount 'someone' | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Resolve-ProbeAccountSid -Times 1 -ParameterFilter { $Name -eq 'someone' }
+  }
+}
