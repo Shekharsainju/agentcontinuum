@@ -123,6 +123,9 @@ function Assert-ProbeGone {
   if ($profiles.Count -gt 0) { $remnants += 'profile' }
   $regSids = @(Get-ProbeProfileListSid)
   if (@($regSids | Where-Object { $Sids -contains $_ }).Count -gt 0) { $remnants += 'profilelist' }
+  # Fail on any leftover right, not only the SeBatchLogonRight teardown grants: an
+  # unexpected right on a probe SID means something outside the probe's control, and a
+  # loud verification failure is safer than silently leaving it.
   foreach ($s in @($Sids)) {
     if (@(Get-ProbeAccountRight -Sid $s).Count -gt 0) { $remnants += 'rights'; break }
   }
