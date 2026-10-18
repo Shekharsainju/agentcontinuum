@@ -342,3 +342,52 @@ Describe 'Start-E0aProbe setup.json S0' {
       (@($Result.checks) | Where-Object { $_.id -eq 'S0' }).details.agent_batch_right -eq $false }
   }
 }
+
+Describe 'Start-E0aProbe setup.json S1' {
+  BeforeEach {
+    Mock -ModuleName ProbeSetup Test-ProbePrecheck { [pscustomobject]@{ Ok = $true; Elevated = $true; SeclogonStatus = 'Running' } }
+    Mock -ModuleName ProbeSetup Import-ProbeNative { @{ Loaded = $true; Error = '' } }
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+    Mock -ModuleName ProbeSetup Resolve-ProbeAccountSid { 'S-R' }
+    Mock -ModuleName ProbeSetup New-Item {}
+    Mock -ModuleName ProbeSetup New-ProbeAccount { 'S-1-5-21-fake' }
+    Mock -ModuleName ProbeSetup Set-ProbeFolders {}
+    Mock -ModuleName ProbeSetup Copy-ProbeBinaries {}
+    Mock -ModuleName ProbeSetup Write-ProbeResult {}
+    Mock -ModuleName ProbeSetup Set-Content {}
+    Mock -ModuleName ProbeSetup Get-ProbeBatchRight { $false }
+    Mock -ModuleName ProbeSetup Write-Host {}
+    $global:probeScanClean = $true
+    Mock -ModuleName ProbeSetup Test-SecretAbsent {
+      [pscustomobject]@{ Clean = $global:probeScanClean; Hits = @(if (-not $global:probeScanClean) { 'x.txt' }); Unscanned = @() } }
+    $run = [pscustomobject]@{ Outcome = 'done'; BatchBefore = $true; BatchAfterRegister = $true; NeededGrant = $false; StrayAfterRun = @() }
+    $global:probeRunOk = $run
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { $global:probeRunOk }
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunB { $global:probeRunOk }
+  }
+  It 'scans bin, the results dir and the probe dir for both passwords' {
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Test-SecretAbsent -Times 1 -ParameterFilter {
+      $Secrets.Count -eq 2 -and $Secrets[0] -ne $Secrets[1] -and $Paths.Count -eq 3 -and
+      $Paths -contains 'C:\ProgramData\ac-probe\bin' -and $Paths -contains 'C:\ProgramData\ac-probe' -and
+      @($Paths | Where-Object { $_ -like 'C:\ProgramData\ac-probe-results\*' }).Count -eq 1 }
+  }
+  It 'passes S1 when no secret is found' {
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      (@($Result.checks) | Where-Object { $_.id -eq 'S1' }).result -eq 'pass' }
+  }
+  It 'fails S1 and reports hit paths but never the passwords' {
+    $global:probeScanClean = $false
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeResult -ParameterFilter {
+      $s1 = @($Result.checks) | Where-Object { $_.id -eq 'S1' }
+      $s1.result -eq 'fail' -and @($s1.details.hits) -contains 'x.txt' -and -not ($s1.details.Keys -contains 'secrets') }
+  }
+  It 'still scans and tears down when run A throws' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeRunA { throw 'boom' }
+    Start-E0aProbe | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Test-SecretAbsent -Times 1
+    Assert-MockCalled -ModuleName ProbeSetup Invoke-ProbeTeardown -Times 2
+  }
+}
