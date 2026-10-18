@@ -222,6 +222,26 @@ Describe 'Invoke-ProbeRunA' {
   }
 }
 
+Describe 'Invoke-ProbeFinalTeardown' {
+  It 'retries once when the first teardown throws then returns the successful result' {
+    $global:probeTdCalls = 0
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown {
+      $global:probeTdCalls++
+      if ($global:probeTdCalls -lt 2) { throw 'io error' }
+      [pscustomobject]@{ Steps = @([pscustomobject]@{ Name = 'Verify'; Ok = $true; Error = '' }) } }
+    $r = Invoke-ProbeFinalTeardown
+    ($r.Steps | Where-Object Name -eq 'Verify').Ok | Should Be $true
+    $global:probeTdCalls | Should Be 2
+  }
+  It 'returns a failed verify step when teardown throws both times' {
+    Mock -ModuleName ProbeSetup Invoke-ProbeTeardown { throw 'still broken' }
+    $r = Invoke-ProbeFinalTeardown
+    $v = $r.Steps | Where-Object Name -eq 'Verify'
+    $v.Ok | Should Be $false
+    $v.Error | Should Match 'still broken'
+  }
+}
+
 Describe 'Start-E0aProbe' {
   BeforeEach {
     $global:probeVerifyOk = $true
