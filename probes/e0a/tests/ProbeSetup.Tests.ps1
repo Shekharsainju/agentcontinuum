@@ -240,20 +240,22 @@ Describe 'Invoke-ProbeRunA' {
 
 Describe 'Write-ProbeRunOutcome' {
   It 'writes a results-A.json recording the outcome when none exists' {
-    $ctx = [pscustomobject]@{ ResultsDir = "$TestDrive\res" }
-    New-Item -ItemType Directory -Force -Path $ctx.ResultsDir | Out-Null
-    InModuleScope ProbeSetup { param($c) Write-ProbeRunOutcome -Ctx $c -Run 'A' -Outcome 'timeout' } -ArgumentList $ctx
-    $j = Get-Content "$TestDrive\res\results-A.json" -Raw | ConvertFrom-Json
+    $dir = "$TestDrive\res"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $global:probeOutCtx = [pscustomobject]@{ ResultsDir = $dir }
+    InModuleScope ProbeSetup { Write-ProbeRunOutcome -Ctx $global:probeOutCtx -Run 'A' -Outcome 'timeout' }
+    $j = Get-Content "$dir\results-A.json" -Raw | ConvertFrom-Json
     $j.run | Should Be 'A'
     $j.checks[0].result | Should Be 'error'
     $j.checks[0].details.run_outcome | Should Be 'timeout'
   }
   It 'does not overwrite a results file the harness already wrote' {
-    $ctx = [pscustomobject]@{ ResultsDir = "$TestDrive\res2" }
-    New-Item -ItemType Directory -Force -Path $ctx.ResultsDir | Out-Null
-    Set-Content -LiteralPath "$TestDrive\res2\results-A.json" -Value 'ORIGINAL' -Encoding ASCII
-    InModuleScope ProbeSetup { param($c) Write-ProbeRunOutcome -Ctx $c -Run 'A' -Outcome 'timeout' } -ArgumentList $ctx
-    (Get-Content "$TestDrive\res2\results-A.json" -Raw).Trim() | Should Be 'ORIGINAL'
+    $dir = "$TestDrive\res2"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    Set-Content -LiteralPath "$dir\results-A.json" -Value 'ORIGINAL' -Encoding ASCII
+    $global:probeOutCtx = [pscustomobject]@{ ResultsDir = $dir }
+    InModuleScope ProbeSetup { Write-ProbeRunOutcome -Ctx $global:probeOutCtx -Run 'A' -Outcome 'timeout' }
+    (Get-Content "$dir\results-A.json" -Raw).Trim() | Should Be 'ORIGINAL'
   }
 }
 

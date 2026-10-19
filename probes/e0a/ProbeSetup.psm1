@@ -195,6 +195,17 @@ function Invoke-ProbeRunAAttempt {
   }
 }
 
+function Write-ProbeRunOutcome {
+  <# Records an incomplete run as results-<Run>.json. The harness writes its own results only after
+     every check, so a run killed on timeout leaves nothing; this preserves the outcome instead. #>
+  param([Parameter(Mandatory)]$Ctx, [Parameter(Mandatory)][string]$Run, [Parameter(Mandatory)][string]$Outcome)
+  $path = Join-Path $Ctx.ResultsDir "results-$Run.json"
+  if (Test-Path -LiteralPath $path) { return }
+  $result = New-ProbeResult -Run $Run
+  Add-ProbeCheck -Result $result -Id 'A0' -Name 'run_outcome' -Outcome 'error' -Details @{ run_outcome = $Outcome }
+  Write-ProbeResult -Result $result -Path $path
+}
+
 function Invoke-ProbeRunA {
   <# Runs the harness as ctl from a scheduled task, granting the batch right once if logon was refused. #>
   param([Parameter(Mandatory)]$Ctx)
@@ -209,6 +220,7 @@ function Invoke-ProbeRunA {
     $attempt = Invoke-ProbeRunAAttempt -Ctx $Ctx
   }
   $outcome = switch ($attempt.State) { 'done' { 'done' } 'timeout' { 'timeout' } default { 'start_failed' } }
+  if ($outcome -eq 'timeout') { Write-ProbeRunOutcome -Ctx $Ctx -Run 'A' -Outcome $outcome }
   [pscustomobject]@{
     Outcome            = $outcome
     BatchBefore        = $batchBefore
@@ -355,4 +367,4 @@ function Start-E0aProbe {
   $exitCode
 }
 
-Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB, Invoke-ProbeFinalTeardown, Start-E0aProbe
+Export-ModuleMember -Function Test-ProbePrecheck, Get-ProbeAclSpec, Set-ProbeFolders, New-ProbeAccount, Invoke-ProbeRunA, Invoke-ProbeRunB, Invoke-ProbeFinalTeardown, Write-ProbeRunOutcome, Start-E0aProbe
