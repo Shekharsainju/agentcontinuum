@@ -163,6 +163,7 @@ Describe 'Invoke-ProbeRunA' {
     Mock -ModuleName ProbeSetup Get-ProbeBatchRight { [bool]$global:probeBatchQueue.Dequeue() }
     Mock -ModuleName ProbeSetup Add-ProbeBatchRight {}
     Mock -ModuleName ProbeSetup Add-ProbeManifestGrant {}
+    Mock -ModuleName ProbeSetup Write-ProbeRunOutcome {}
   }
   It 'registers a limited password-logon task as ctl and cleans it up' {
     $global:probeInfoQueue.Enqueue(0); $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
@@ -219,6 +220,40 @@ Describe 'Invoke-ProbeRunA' {
     Mock -ModuleName ProbeSetup Test-Path { $true }
     $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
     (Invoke-ProbeRunA -Ctx (New-TestCtx)).Outcome | Should Be 'done'
+  }
+  It 'writes a run-outcome record when the scheduled task times out' {
+    Mock -ModuleName ProbeSetup Get-ScheduledTask { [pscustomobject]@{ State = 'Running' } }
+    Mock -ModuleName ProbeSetup Get-ScheduledTaskInfo { [pscustomobject]@{ LastTaskResult = [uint32]267009 } }
+    $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
+    InModuleScope ProbeSetup { $script:RunTimeoutMs = 5 }
+    try { Invoke-ProbeRunA -Ctx (New-TestCtx) | Out-Null }
+    finally { InModuleScope ProbeSetup { $script:RunTimeoutMs = 300000 } }
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeRunOutcome -Times 1 -Scope It -ParameterFilter {
+      $Run -eq 'A' -and $Outcome -eq 'timeout' }
+  }
+  It 'writes no run-outcome record when the run completes' {
+    $global:probeInfoQueue.Enqueue(0); $global:probeBatchQueue.Enqueue($true); $global:probeBatchQueue.Enqueue($true)
+    Invoke-ProbeRunA -Ctx (New-TestCtx) | Out-Null
+    Assert-MockCalled -ModuleName ProbeSetup Write-ProbeRunOutcome -Times 0 -Scope It
+  }
+}
+
+Describe 'Write-ProbeRunOutcome' {
+  It 'writes a results-A.json recording the outcome when none exists' {
+    $ctx = [pscustomobject]@{ ResultsDir = "$TestDrive\res" }
+    New-Item -ItemType Directory -Force -Path $ctx.ResultsDir | Out-Null
+    InModuleScope ProbeSetup { param($c) Write-ProbeRunOutcome -Ctx $c -Run 'A' -Outcome 'timeout' } -ArgumentList $ctx
+    $j = Get-Content "$TestDrive\res\results-A.json" -Raw | ConvertFrom-Json
+    $j.run | Should Be 'A'
+    $j.checks[0].result | Should Be 'error'
+    $j.checks[0].details.run_outcome | Should Be 'timeout'
+  }
+  It 'does not overwrite a results file the harness already wrote' {
+    $ctx = [pscustomobject]@{ ResultsDir = "$TestDrive\res2" }
+    New-Item -ItemType Directory -Force -Path $ctx.ResultsDir | Out-Null
+    Set-Content -LiteralPath "$TestDrive\res2\results-A.json" -Value 'ORIGINAL' -Encoding ASCII
+    InModuleScope ProbeSetup { param($c) Write-ProbeRunOutcome -Ctx $c -Run 'A' -Outcome 'timeout' } -ArgumentList $ctx
+    (Get-Content "$TestDrive\res2\results-A.json" -Raw).Trim() | Should Be 'ORIGINAL'
   }
 }
 
