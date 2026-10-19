@@ -52,6 +52,20 @@ Describe 'Invoke-ProbeTeardown' {
     (($r.Steps | Where-Object Name -eq 'RemoveAccounts')) | Should Not BeNullOrEmpty
   }
 
+  It 'unloads a loaded profile hive before deleting it' {
+    Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl'; Loaded = $true } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
+    Mock -ModuleName ProbeTeardown Dismount-ProbeProfileHive { }
+    Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\' | Out-Null
+    Assert-MockCalled -ModuleName ProbeTeardown Dismount-ProbeProfileHive -ParameterFilter { $Sid -eq 'S-1-5-21-x' } -Times 1 -Scope It
+  }
+
+  It 'does not unload a profile that is not loaded' {
+    Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl'; Loaded = $false } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
+    Mock -ModuleName ProbeTeardown Dismount-ProbeProfileHive { }
+    Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\' | Out-Null
+    Assert-MockCalled -ModuleName ProbeTeardown Dismount-ProbeProfileHive -Times 0 -Scope It
+  }
+
   It 'strips the batch right from every discovered probe SID even without a manifest' {
     Mock -ModuleName ProbeTeardown Get-LocalUser {
       [pscustomobject]@{ SID = [pscustomobject]@{ Value = 'S-1-5-21-ctl' } },
