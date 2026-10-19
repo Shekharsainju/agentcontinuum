@@ -77,6 +77,14 @@ function Remove-ProbeProfileInstance {
   [void](Invoke-CimMethod -InputObject $Profile -MethodName Delete -ErrorAction Stop)
 }
 
+function Dismount-ProbeProfileHive {
+  param([Parameter(Mandatory)][string]$Sid)
+  # Win32_UserProfile.Delete() leaves the profile folder and ProfileList entry behind while the
+  # account's hive is still mounted under HKU after a just-ended batch or secondary-logon session;
+  # unloading it first lets the delete complete instead of stalling until the hive drops on its own.
+  [void](& reg.exe unload "HKU\$Sid" 2>&1)
+}
+
 function Remove-ProbeProfile {
   param([string[]]$Sids)
   $profiles = @(Get-CimInstance -ClassName Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object {
@@ -84,9 +92,14 @@ function Remove-ProbeProfile {
     })
   $failed = $false
   foreach ($p in $profiles) {
+    $loaded = ($p.PSObject.Properties['Loaded']) -and $p.Loaded
     $done = $false
     for ($i = 0; $i -lt 5; $i++) {
-      try { Remove-ProbeProfileInstance -Profile $p; $done = $true; break }
+      try {
+        if ($loaded -and $p.SID) { Dismount-ProbeProfileHive -Sid ([string]$p.SID) }
+        Remove-ProbeProfileInstance -Profile $p
+        $done = $true; break
+      }
       catch { Start-Sleep -Seconds 2 }
     }
     if (-not $done) { $failed = $true }
