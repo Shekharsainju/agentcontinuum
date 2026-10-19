@@ -18,6 +18,15 @@ function New-CheckExchange {
   $p
 }
 
+function Get-C5ExchangeBase {
+  param([Parameter(Mandatory)][hashtable]$Ctx)
+  # C5 spawns its sub-harness and grandchild as the harness account (ctl under A/B), which has only
+  # read access to the agent exchange; its scratch goes in the ctl-owned folder so those processes
+  # can create and write it. Self mode passes no CtlDir and falls back to the writable exchange.
+  if ($Ctx.ContainsKey('CtlDir') -and $Ctx.CtlDir) { return $Ctx.CtlDir }
+  $Ctx.Exchange
+}
+
 function Wait-ForFile {
   # Polls for $Path to exist and parse as JSON; returns $null on timeout.
   param([Parameter(Mandatory)][string]$Path, [double]$TimeoutSeconds = 10)
@@ -233,7 +242,7 @@ function Invoke-C5KillOnClose {
   $outcome = 'error'; $details = @{}
   $sub = $null
   try {
-    $exch = New-CheckExchange -Exchange $Ctx.Exchange -Id 'C5'
+    $exch = New-CheckExchange -Exchange (Get-C5ExchangeBase -Ctx $Ctx) -Id 'C5'
     $subHarness = Join-Path $Ctx.BinDir 'SubHarness.ps1'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell.exe'
@@ -395,4 +404,4 @@ function Invoke-C8Isolation {
 }
 
 Export-ModuleMember -Function Invoke-C2LaunchAssign, Invoke-C3FreezeThaw, Invoke-C4Terminate,
-  Invoke-C5KillOnClose, Invoke-C6Breakaway, Invoke-C7Escape, Invoke-C8Isolation
+  Invoke-C5KillOnClose, Invoke-C6Breakaway, Invoke-C7Escape, Invoke-C8Isolation, Get-C5ExchangeBase
