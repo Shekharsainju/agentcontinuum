@@ -72,24 +72,11 @@ public static class SettingsScanner
         }
         foreach (var key in rules?.P2ExtraKeys ?? [])
         {
-            if (HasPath(root, key))
+            if (JsonPaths.Has(root, key))
             {
                 problems.Add($"{scope}: {key}");
             }
         }
-    }
-
-    private static bool HasPath(JsonElement root, string dottedPath)
-    {
-        var current = root;
-        foreach (var part in dottedPath.Split('.'))
-        {
-            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, string? managedPath)
