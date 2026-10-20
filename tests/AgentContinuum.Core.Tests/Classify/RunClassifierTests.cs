@@ -156,6 +156,37 @@ public sealed class RunClassifierTests
     }
 
     [Fact]
+    public void ApiKeyAuthSource_BillingMismatchOverridesSuccess()
+    {
+        var apiKeyInit = Init() with { AuthSource = "ANTHROPIC_API_KEY" };
+
+        var result = RunClassifier.Classify(Rules, Session, [apiKeyInit, Result(false, "completed")], NoHooks, 0);
+
+        Assert.Equal(new Classification(Outcome.BillingMismatch, "Billing unverified", null), result);
+    }
+
+    [Fact]
+    public void OutputBeforeInit_BillingMismatchOverridesLimit()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Result(true, "api_error"), Init()],
+            [Hook("StopFailure", Session, "rate_limit", 1_800_000_000)],
+            1);
+
+        Assert.Equal(Outcome.BillingMismatch, result.Outcome);
+    }
+
+    [Fact]
+    public void NoInitAndNoOutput_ClassifiedNormally()
+    {
+        var result = RunClassifier.Classify(Rules, Session, [], NoHooks, 1);
+
+        Assert.Equal(Outcome.Failed, result.Outcome);
+    }
+
+    [Fact]
     public void NullRules_Ambiguous()
     {
         var result = RunClassifier.Classify(null, Session, [Init(), Result(false, "completed")], NoHooks, 0);

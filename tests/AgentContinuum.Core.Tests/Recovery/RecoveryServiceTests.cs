@@ -91,14 +91,14 @@ public sealed class RecoveryServiceTests : IDisposable
         return opId;
     }
 
-    private static FilteredEvent Event(string type, string? subtype, Dictionary<string, string> fields) =>
-        new(type, subtype, null, null, null, fields);
+    private static FilteredEvent Event(string type, string? subtype, Dictionary<string, string> fields, string? authSource = null) =>
+        new(type, subtype, null, null, authSource, fields);
 
     [Fact]
     public void Exited_ClassifiedFromRecordedEvents()
     {
         var opId = ExitedOp(0);
-        StreamEventLog.Append(_store, opId, Event("system", "init", []));
+        StreamEventLog.Append(_store, opId, Event("system", "init", [], "none"));
         StreamEventLog.Append(_store, opId, Event("result", "success", new() { ["is_error"] = "false", ["terminal_reason"] = "\"completed\"" }));
 
         Service().Reconcile();
@@ -106,6 +106,21 @@ public sealed class RecoveryServiceTests : IDisposable
         var op = _ledger.Get(opId)!;
         Assert.Equal((OpState.Classified, Outcome.Completed), (op.State, op.Outcome));
         Assert.Equal(TaskState.Completed, _tasks.Get("t1")!.State);
+    }
+
+    [Fact]
+    public void Exited_ApiKeyAuthSource_BillingMismatch()
+    {
+        var opId = ExitedOp(0);
+        StreamEventLog.Append(_store, opId, Event("system", "init", [], "ANTHROPIC_API_KEY"));
+        StreamEventLog.Append(_store, opId, Event("result", "success", new() { ["is_error"] = "false", ["terminal_reason"] = "\"completed\"" }));
+
+        Service().Reconcile();
+
+        var op = _ledger.Get(opId)!;
+        Assert.Equal((Outcome.BillingMismatch, "Billing unverified"), (op.Outcome, op.Reason));
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Billing unverified"), (task.State, task.AttentionReason));
     }
 
     [Fact]
