@@ -75,7 +75,59 @@ public sealed class BillingProofsTests : IDisposable
             case "P3_RULE":
                 _rules = _rules! with { P3 = null };
                 break;
+            case "P4":
+                _runner.Result = new CommandResult(0, ApiKeyStatus, false);
+                break;
+            case "P4_RULE":
+                _rules = _rules! with { P4 = null };
+                break;
         }
+    }
+
+    private const string ApiKeyStatus =
+        """{"loggedIn":true,"authMethod":"api_key","apiProvider":"firstParty","apiKeySource":"ANTHROPIC_API_KEY"}""";
+
+    [Fact]
+    public void P4_SubscriptionValue_Passes()
+    {
+        var verdict = Evaluate();
+
+        Assert.True(verdict.Verified);
+        var call = Assert.Single(_runner.Calls);
+        Assert.Equal(_task.CliPath, call.Exe);
+        Assert.Equal(["auth", "status"], call.Args);
+        Assert.Same(_childEnv, call.Env);
+        Assert.Equal(TimeSpan.FromSeconds(15), call.Timeout);
+    }
+
+    [Fact]
+    public void P4_Timeout_Fails()
+    {
+        _runner.Result = new CommandResult(-1, SubscriptionStatus, true);
+
+        Assert.Equal(["P4"], Evaluate().FailedProofs);
+    }
+
+    [Theory]
+    [InlineData(1, SubscriptionStatus)]
+    [InlineData(0, "not json")]
+    [InlineData(0, "[]")]
+    [InlineData(0, """{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}""")]
+    [InlineData(0, """{"loggedIn":"true","authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"pro"}""")]
+    [InlineData(0, """{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"bedrock","subscriptionType":"pro"}""")]
+    public void P4_NotASubscription_Fails(int exitCode, string stdout)
+    {
+        _runner.Result = new CommandResult(exitCode, stdout, false);
+
+        Assert.Equal(["P4"], Evaluate().FailedProofs);
+    }
+
+    [Fact]
+    public void P4_RunnerThrows_Fails()
+    {
+        _runner.Throw = true;
+
+        Assert.Equal(["P4"], Evaluate().FailedProofs);
     }
 
     [Fact]
@@ -136,6 +188,8 @@ public sealed class BillingProofsTests : IDisposable
     [InlineData("P2", "P2")]
     [InlineData("P3", "P3")]
     [InlineData("P3_RULE", "P3_UNEVALUABLE")]
+    [InlineData("P4", "P4")]
+    [InlineData("P4_RULE", "P4_UNEVALUABLE")]
     public void EachProofAloneBlocks(string proof, string failed)
     {
         Break(proof);
@@ -150,12 +204,14 @@ public sealed class BillingProofsTests : IDisposable
     {
         public CommandResult Result { get; set; } = new(1, "", false);
 
+        public bool Throw { get; set; }
+
         public List<(string Exe, string[] Args, IReadOnlyDictionary<string, string> Env, TimeSpan Timeout)> Calls { get; } = [];
 
         public CommandResult Run(string exe, string[] args, IReadOnlyDictionary<string, string> env, TimeSpan timeout)
         {
             Calls.Add((exe, args, env, timeout));
-            return Result;
+            return Throw ? throw new System.ComponentModel.Win32Exception(2) : Result;
         }
     }
 }
