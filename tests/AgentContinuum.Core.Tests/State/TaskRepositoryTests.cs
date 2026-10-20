@@ -89,4 +89,14 @@ public sealed class TaskRepositoryTests : IDisposable
         Assert.Null(cleared.ResetExpectedAtEpoch);
         Assert.Null(cleared.AttemptPermittedAtEpoch);
     }
+
+    [Fact]
+    public void SetBaseline_StoresFingerprint()
+    {
+        _tasks.Add(TestTasks.Sample("t1"));
+
+        _tasks.SetBaseline("t1", new string('f', 64));
+
+        Assert.Equal(new string('f', 64), _tasks.Get("t1")!.BaselineFingerprint);
+    }
 }
