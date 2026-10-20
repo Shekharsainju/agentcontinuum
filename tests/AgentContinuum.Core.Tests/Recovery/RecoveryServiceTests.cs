@@ -155,6 +155,39 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(OpState.Interrupted, _ledger.Get(spawned)!.State);
     }
 
+    private (int Ops, int Live, int Attempts) Counts()
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT
+                (SELECT count(*) FROM launch_ops),
+                (SELECT count(*) FROM launch_ops WHERE state IN ('INTENT','SPAWNED','EXITED')),
+                (SELECT sum(attempts_used) FROM tasks)
+            """;
+        using var reader = cmd.ExecuteReader();
+        reader.Read();
+        return (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+    }
+
+    [Fact]
+    public void Reconcile_NeverLaunches()
+    {
+        _ledger.BeginIntent("t1");
+        _tasks.Add(TestTasks.Sample("t2"));
+        _ledger.MarkSpawned(_ledger.BeginIntent("t2"), 100, 1, Guid.NewGuid());
+        _tasks.Add(TestTasks.Sample("t3"));
+        var exited = _ledger.BeginIntent("t3");
+        _ledger.MarkSpawned(exited, 101, 1, Guid.NewGuid());
+        _ledger.MarkExited(exited, 0);
+        var before = Counts();
+
+        Service().Reconcile();
+        Service().Reconcile();
+
+        Assert.Equal((before.Ops, 0, before.Attempts), Counts());
+        Assert.All(_tasks.List(), t => Assert.NotEqual(TaskState.Running, t.State));
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
