@@ -71,6 +71,24 @@ public sealed class TaskRepository
         return tasks;
     }
 
+    public void SetState(string taskId, TaskState state, string? reason) =>
+        Update(taskId, "state = $state, attention_reason = $reason", ("$state", StateText.ToText(state)), ("$reason", reason));
+
+    private void Update(string taskId, string assignments, params (string Name, object? Value)[] values)
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = $"UPDATE tasks SET {assignments} WHERE task_id = $task_id";
+        cmd.Parameters.AddWithValue("$task_id", taskId);
+        foreach (var (name, value) in values)
+        {
+            cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        }
+        if (cmd.ExecuteNonQuery() != 1)
+        {
+            throw new InvalidOperationException($"No task {taskId}.");
+        }
+    }
+
     private static TaskRecord Read(SqliteDataReader r) => new(
         TaskId: r.GetString(0),
         Label: r.GetString(1),
