@@ -10,6 +10,7 @@ namespace AgentContinuum.Core.Billing;
 public sealed class BillingProofs
 {
     public static readonly TimeSpan AuthStatusTimeout = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan AttestationMaxAge = TimeSpan.FromDays(30);
 
     private readonly ICommandRunner _runner;
     private readonly IClock _clock;
@@ -54,7 +55,22 @@ public sealed class BillingProofs
         {
             failed.Add("P5_UNEVALUABLE");
         }
+        if (!OverageAttestationCurrent())
+        {
+            failed.Add("P6");
+        }
         return new BillingVerdict(failed.Count == 0, failed);
+    }
+
+    // An attestation dated in the future fails too: the wall clock cannot be trusted to age it.
+    private bool OverageAttestationCurrent()
+    {
+        if (new Attestations(_store).Latest(Attestations.OverageOff) is not { } at)
+        {
+            return false;
+        }
+        var age = _clock.UtcNow - at;
+        return age >= TimeSpan.Zero && age < AttestationMaxAge;
     }
 
     // The output names the account, so it is parsed here and never stored or logged.
