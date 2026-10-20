@@ -18,6 +18,23 @@ public static class FakeClaudeProcess
         string stdin = "",
         IReadOnlyDictionary<string, string>? env = null)
     {
+        using var process = Start(workingDir, args, stdin, env);
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        _ = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("FakeClaude did not exit within 30 s.");
+        }
+        return (process.ExitCode, stdout.Result.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    public static Process Start(
+        string workingDir,
+        string[] args,
+        string stdin = "",
+        IReadOnlyDictionary<string, string>? env = null)
+    {
         var info = new ProcessStartInfo(ExePath)
         {
             WorkingDirectory = workingDir,
@@ -37,16 +54,9 @@ public static class FakeClaudeProcess
             info.Environment[name] = value;
         }
 
-        using var process = Process.Start(info)!;
+        var process = Process.Start(info)!;
         process.StandardInput.Write(stdin);
         process.StandardInput.Close();
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        _ = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException("FakeClaude did not exit within 30 s.");
-        }
-        return (process.ExitCode, stdout.Result.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return process;
     }
 }
