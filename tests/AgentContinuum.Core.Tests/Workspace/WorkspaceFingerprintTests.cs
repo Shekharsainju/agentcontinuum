@@ -79,6 +79,22 @@ public sealed class WorkspaceFingerprintTests : IDisposable
     }
 
     [Fact]
+    public void Fingerprint_RepoFsmonitorHookNotRun()
+    {
+        var marker = _dir.File("fsmonitor-ran");
+        var hook = _dir.File("fsmonitor.sh");
+        File.WriteAllText(hook, $"#!/bin/sh\necho ran > '{marker.Replace('\\', '/')}'\nexit 1\n");
+        _repo.Git("config", "core.fsmonitor", hook.Replace('\\', '/'));
+        _repo.Git("ls-files");
+        Assert.True(File.Exists(marker), "plain ls-files should run the repo's fsmonitor hook");
+        File.Delete(marker);
+
+        Hash();
+
+        Assert.False(File.Exists(marker));
+    }
+
+    [Fact]
     public void Fingerprint_IgnoresGitignored()
     {
         var before = Hash();
