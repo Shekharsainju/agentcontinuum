@@ -45,4 +45,32 @@ public sealed class TaskRepositoryTests : IDisposable
 
         Assert.Equal(["t2", "t1"], _tasks.List().Select(t => t.TaskId));
     }
+
+    [Fact]
+    public void SetState_StoresStateAndReason()
+    {
+        _tasks.Add(TestTasks.Sample("t1"));
+
+        _tasks.SetState("t1", TaskState.NeedsAttention, "Run failed");
+
+        var task = _tasks.Get("t1")!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Run failed", task.AttentionReason);
+    }
+
+    [Fact]
+    public void SetState_NullReason_ClearsReason()
+    {
+        _tasks.Add(TestTasks.Sample("t1") with { State = TaskState.NeedsAttention, AttentionReason = "Run failed" });
+
+        _tasks.SetState("t1", TaskState.WaitingForReset, null);
+
+        Assert.Null(_tasks.Get("t1")!.AttentionReason);
+    }
+
+    [Fact]
+    public void SetState_UnknownTask_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => _tasks.SetState("missing", TaskState.Revoked, null));
+    }
 }
