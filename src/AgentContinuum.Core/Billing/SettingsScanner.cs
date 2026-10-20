@@ -6,6 +6,11 @@ namespace AgentContinuum.Core.Billing;
 /// <summary>P2: no settings scope Claude Code reads may route billing away from the subscription.</summary>
 public static class SettingsScanner
 {
+    private static readonly string[] BillingVariables =
+    [
+        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+    ];
+
     public static ProofResult Scan(string userProfile, string worktree, string? managedPath, ClaudeRules rules)
     {
         var problems = new List<string>();
@@ -21,6 +26,16 @@ public static class SettingsScanner
             if (root.TryGetProperty("apiKeyHelper", out _))
             {
                 problems.Add($"{scope}: apiKeyHelper");
+            }
+            if (root.TryGetProperty("env", out var env) && env.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var variable in env.EnumerateObject())
+                {
+                    if (BillingVariables.Contains(variable.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        problems.Add($"{scope}: env.{variable.Name.ToUpperInvariant()}");
+                    }
+                }
             }
         }
         return ProofResult.FromProblems(problems);
