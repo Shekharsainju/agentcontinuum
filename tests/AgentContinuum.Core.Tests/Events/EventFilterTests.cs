@@ -71,4 +71,19 @@ public sealed class EventFilterTests
             Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(filtered));
         }
     }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("")]
+    [InlineData("[1,2]")]
+    [InlineData("\"text\"")]
+    [InlineData("{\"subtype\":\"init\"}")]
+    [InlineData("{\"type\":1}")]
+    [InlineData("{\"type\":\"result\"")]
+    [InlineData("{\"type\":\"result\"} trailing")]
+    [InlineData("{\"type\":\"result\"}{\"type\":\"result\"}")]
+    public void Accept_UnparseableLine_ReturnsNull(string line)
+    {
+        Assert.Null(Filter().Accept(line));
+    }
 }
