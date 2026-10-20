@@ -54,12 +54,20 @@ public static class SettingsScanner
         }
         foreach (var key in rules?.P2ExtraKeys ?? [])
         {
-            if (JsonPaths.Has(root, key))
+            if (key.StartsWith(EnvPrefix, StringComparison.Ordinal) ? HasEnvName(root, key[EnvPrefix.Length..]) : JsonPaths.Has(root, key))
             {
                 problems.Add($"{scope}: {key}");
             }
         }
     }
+
+    private const string EnvPrefix = "env.";
+
+    // Windows environment names are case-insensitive, so Claude Code honours an env entry in any case.
+    private static bool HasEnvName(JsonElement root, string name) =>
+        root.TryGetProperty("env", out var env)
+        && env.ValueKind == JsonValueKind.Object
+        && env.EnumerateObject().Any(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, string? managedPath)
     {
