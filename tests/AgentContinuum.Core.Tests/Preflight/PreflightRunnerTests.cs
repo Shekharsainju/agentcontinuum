@@ -129,6 +129,34 @@ public sealed class PreflightRunnerTests : IDisposable
     }
 
     [Fact]
+    public void Preflight_NowFlag_WaivesEligibilityOnly()
+    {
+        _f.Task = _f.Task with
+        {
+            State = TaskState.WaitingForReset,
+            AttemptPermittedAtEpoch = _f.Clock.UtcNow.AddMinutes(30).ToUnixTimeSeconds(),
+        };
+
+        Assert.Equal(["NOT_YET_ELIGIBLE"], Run().Reasons);
+        Assert.True(Run(now: true).Pass);
+
+        _f.Clock.UtcNow = DateTimeOffset.FromUnixTimeSeconds(_f.Task.AttemptPermittedAtEpoch!.Value);
+        Assert.True(Run().Pass);
+    }
+
+    [Fact]
+    public void Preflight_NowFlag_DoesNotWaiveAdmission()
+    {
+        _f.Task = _f.Task with
+        {
+            AttemptsUsed = _f.Task.MaxAttempts,
+            AttemptPermittedAtEpoch = _f.Clock.UtcNow.AddMinutes(30).ToUnixTimeSeconds(),
+        };
+
+        Assert.Equal(["ATTEMPTS_EXHAUSTED"], Run(now: true).Reasons);
+    }
+
+    [Fact]
     public void Preflight_UnknownTask_AdmissionState()
     {
         var host = new PreflightHost(GitRepo.GitExe, _f.ParentEnv, _f.UserProfile, _f.ManagedSettingsPaths);
