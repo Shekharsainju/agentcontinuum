@@ -73,4 +73,20 @@ public sealed class TaskRepositoryTests : IDisposable
     {
         Assert.Throws<InvalidOperationException>(() => _tasks.SetState("missing", TaskState.Revoked, null));
     }
+
+    [Fact]
+    public void SetSchedule_StoresAndClearsEpochs()
+    {
+        _tasks.Add(TestTasks.Sample("t1"));
+
+        _tasks.SetSchedule("t1", 1_800_000_000, 1_800_000_120);
+        var scheduled = _tasks.Get("t1")!;
+        _tasks.SetSchedule("t1", null, null);
+        var cleared = _tasks.Get("t1")!;
+
+        Assert.Equal(1_800_000_000, scheduled.ResetExpectedAtEpoch);
+        Assert.Equal(1_800_000_120, scheduled.AttemptPermittedAtEpoch);
+        Assert.Null(cleared.ResetExpectedAtEpoch);
+        Assert.Null(cleared.AttemptPermittedAtEpoch);
+    }
 }
