@@ -14,7 +14,27 @@ public static class HookRecorder
     private const string HookNameField = "hook_event_name";
     private const string SessionIdField = "session_id";
 
+    // Runs inside Claude Code's hook call, where an exception would surface as hook output. A failure is
+    // recorded as a payload-free hook_error so the classifier still sees that a stop happened.
     public static void Record(StateStore store, string opId, Stream stdin, ClaudeRules? rules)
+    {
+        try
+        {
+            RecordOrThrow(store, opId, stdin, rules);
+        }
+        catch (Exception)
+        {
+            try
+            {
+                Insert(store, opId, HookErrorKind, "{}");
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    private static void RecordOrThrow(StateStore store, string opId, Stream stdin, ClaudeRules? rules)
     {
         var input = ReadBounded(stdin);
         var kept = input is null ? null : new JsonAllowlist(AllowedPaths(rules), EventFilter.MaxValueChars).Read(input);
