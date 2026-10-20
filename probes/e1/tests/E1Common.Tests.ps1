@@ -82,3 +82,27 @@ Describe 'Invoke-E1Command' {
     $r.stdout.Trim() | Should Be '0'
   }
 }
+
+Describe 'Invoke-E1StreamRun' {
+  $emit = "$TestDrive\emit.ps1"
+  Set-Content -LiteralPath $emit -Value @'
+param([int]$LingerSeconds = 0)
+[Console]::Out.WriteLine('{"type":"system","subtype":"init","apiKeySource":"none"}')
+[Console]::Out.WriteLine('{"type":"result","subtype":"success","result":"SENTINEL-r3s text"}')
+[Console]::Out.Flush()
+if ($LingerSeconds) { Start-Sleep -Seconds $LingerSeconds }
+'@
+  It 'shapes each line and sees the process exit on its own' {
+    $r = Invoke-E1StreamRun -Exe 'powershell.exe' -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$emit`"" -ExitGraceSeconds 30
+    @($r.events).Count | Should Be 2
+    $r.events[0].shape['apiKeySource'] | Should Be 'none'
+    $r.final_seen | Should Be $true
+    $r.exited_by_itself | Should Be $true
+    ($r | ConvertTo-Json -Depth 8) | Should Not Match 'SENTINEL'
+  }
+  It 'kills a process that stays alive after the final event' {
+    $r = Invoke-E1StreamRun -Exe 'powershell.exe' -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$emit`" -LingerSeconds 30" -ExitGraceSeconds 2
+    $r.exited_by_itself | Should Be $false
+    $r.seconds_final_to_exit -lt 15 | Should Be $true
+  }
+}
