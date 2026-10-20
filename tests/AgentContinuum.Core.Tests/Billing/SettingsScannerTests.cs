@@ -74,4 +74,22 @@ public sealed class SettingsScannerTests : IDisposable
         Assert.Equal([$"{scope}: apiKeyHelper"], result.Problems);
         Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
     }
+
+    [Theory]
+    [InlineData("ANTHROPIC_BASE_URL")]
+    [InlineData("ANTHROPIC_API_KEY")]
+    [InlineData("ANTHROPIC_AUTH_TOKEN")]
+    [InlineData("CLAUDE_CODE_USE_BEDROCK")]
+    [InlineData("CLAUDE_CODE_USE_VERTEX")]
+    [InlineData("anthropic_base_url")]
+    public void Scan_EnvBaseUrlInProjectSettings_Fails(string name)
+    {
+        Write("project", $$$"""{"env":{"{{{name}}}":"SENTINEL-p2"}}""");
+
+        var result = Scan();
+
+        Assert.False(result.Pass);
+        Assert.Equal([$"project: env.{name.ToUpperInvariant()}"], result.Problems);
+        Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
+    }
 }
