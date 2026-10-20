@@ -1,3 +1,4 @@
+using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Rules;
@@ -10,6 +11,7 @@ public static class RunClassifier
     public const string UsageLimitReason = "Usage limit";
     public const string FailedReason = "Run failed";
     public const string AmbiguousReason = "Stopped, reason unverified";
+    public const string BillingMismatchReason = "Billing unverified";
 
     public static Classification Classify(
         ClaudeRules? rules,
@@ -18,6 +20,12 @@ public static class RunClassifier
         IReadOnlyList<HookEvent> hooks,
         int exitCode)
     {
+        // A billing mismatch outranks every other outcome: the run may have been billed off the subscription.
+        if (rules?.P5 is not null && FirstEventCheck.Over(stream, rules) == FirstEventStatus.Mismatch)
+        {
+            return new Classification(Outcome.BillingMismatch, BillingMismatchReason, null);
+        }
+
         if (exitCode == 0 && rules?.Result is { } resultRule && IsSuccess(resultRule, stream))
         {
             return new Classification(Outcome.Completed, CompletedReason, null);
