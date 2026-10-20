@@ -24,9 +24,14 @@ public static class FirstEventCheck
 
     public static FirstEventStatus Observe(FirstEventStatus current, FilteredEvent e, ClaudeRules? rules)
     {
-        if (current != FirstEventStatus.Pending)
+        if (current == FirstEventStatus.Mismatch)
         {
             return current;
+        }
+        // Settings can reload mid-run; a later P5 event off the subscription is evidence the route changed.
+        if (current == FirstEventStatus.Verified)
+        {
+            return rules?.P5 is { } later && IsP5Event(e, later) && !Matches(e, rules) ? FirstEventStatus.Mismatch : current;
         }
         if (rules?.P5 is not { } p5)
         {
