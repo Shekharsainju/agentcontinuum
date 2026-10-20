@@ -8,18 +8,19 @@ namespace AgentContinuum.Core.Events;
 public static class HookRecorder
 {
     public const string HookKind = "hook";
+    public const string HookErrorKind = "hook_error";
+    public const int MaxInputBytes = 64 * 1024;
 
     private const string HookNameField = "hook_event_name";
     private const string SessionIdField = "session_id";
 
     public static void Record(StateStore store, string opId, Stream stdin, ClaudeRules? rules)
     {
-        using var buffer = new MemoryStream();
-        stdin.CopyTo(buffer);
-
-        var kept = new JsonAllowlist(AllowedPaths(rules), EventFilter.MaxValueChars).Read(buffer.ToArray());
+        var input = ReadBounded(stdin);
+        var kept = input is null ? null : new JsonAllowlist(AllowedPaths(rules), EventFilter.MaxValueChars).Read(input);
         if (kept is null)
         {
+            Insert(store, opId, HookErrorKind, "{}");
             return;
         }
 
@@ -40,13 +41,19 @@ public static class HookRecorder
     public static IReadOnlyList<HookEvent> ForOp(StateStore store, string opId)
     {
         using var cmd = store.Connection.CreateCommand();
-        cmd.CommandText = "SELECT kind, fields_json FROM events WHERE op_id = $op_id AND kind = $hook ORDER BY id";
+        cmd.CommandText = "SELECT kind, fields_json FROM events WHERE op_id = $op_id AND kind IN ($hook, $hook_error) ORDER BY id";
         cmd.Parameters.AddWithValue("$op_id", opId);
         cmd.Parameters.AddWithValue("$hook", HookKind);
+        cmd.Parameters.AddWithValue("$hook_error", HookErrorKind);
         using var reader = cmd.ExecuteReader();
         var hooks = new List<HookEvent>();
         while (reader.Read())
         {
+            if (reader.GetString(0) == HookErrorKind)
+            {
+                hooks.Add(new HookEvent(HookErrorKind, null, new Dictionary<string, string>()));
+                continue;
+            }
             using var doc = JsonDocument.Parse(reader.GetString(1));
             var root = doc.RootElement;
             hooks.Add(new HookEvent(
@@ -57,6 +64,18 @@ public static class HookRecorder
                     .ToDictionary(p => p.Name, p => p.Value.GetRawText(), StringComparer.Ordinal)));
         }
         return hooks;
+    }
+
+    private static byte[]? ReadBounded(Stream stdin)
+    {
+        var buffer = new byte[MaxInputBytes + 1];
+        var total = 0;
+        int read;
+        while (total < buffer.Length && (read = stdin.Read(buffer, total, buffer.Length - total)) > 0)
+        {
+            total += read;
+        }
+        return total > MaxInputBytes ? null : buffer[..total];
     }
 
     private static IEnumerable<string> AllowedPaths(ClaudeRules? rules)
