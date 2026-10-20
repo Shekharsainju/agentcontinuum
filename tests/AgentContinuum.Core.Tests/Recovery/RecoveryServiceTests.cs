@@ -47,6 +47,24 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(1, task.AttemptsUsed);
     }
 
+    [Theory]
+    [InlineData("claude.exe -p --session-id {0} --output-format stream-json")]
+    [InlineData("claude.exe -p --resume {0}")]
+    [InlineData("CLAUDE.EXE --RESUME {1}")]
+    public void Intent_ProcessWithSessionId_Interrupted_NeedsAttention(string commandLine)
+    {
+        var opId = _ledger.BeginIntent("t1");
+        var session = _task.SessionId.ToString("D");
+        _lister.Processes.Add(new ProcessInfo(100, 1, string.Format(commandLine, session, session.ToUpperInvariant())));
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Interrupted, _ledger.Get(opId)!.State);
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Interrupted launch"), (task.State, task.AttentionReason));
+        Assert.Equal(1, task.AttemptsUsed);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
