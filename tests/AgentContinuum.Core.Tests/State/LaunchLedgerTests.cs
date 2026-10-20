@@ -83,4 +83,152 @@ public sealed class LaunchLedgerTests : IDisposable
         Assert.Equal(2, _tasks.Get("t2")!.AttemptsUsed);
         Assert.Null(ledger.Live("t2"));
     }
+
+    private static readonly (OpState From, OpState To)[] Legal =
+    [
+        (OpState.Intent, OpState.Spawned),
+        (OpState.Intent, OpState.Abandoned),
+        (OpState.Intent, OpState.Interrupted),
+        (OpState.Spawned, OpState.Exited),
+        (OpState.Spawned, OpState.Interrupted),
+        (OpState.Exited, OpState.Classified),
+    ];
+
+    public static TheoryData<OpState, OpState> LegalPairs()
+    {
+        var data = new TheoryData<OpState, OpState>();
+        foreach (var (from, to) in Legal)
+        {
+            data.Add(from, to);
+        }
+        return data;
+    }
+
+    public static TheoryData<OpState, OpState> IllegalPairs()
+    {
+        var data = new TheoryData<OpState, OpState>();
+        foreach (var from in Enum.GetValues<OpState>())
+        {
+            foreach (var to in Enum.GetValues<OpState>().Where(s => s != OpState.Intent))
+            {
+                if (!Legal.Contains((from, to)))
+                {
+                    data.Add(from, to);
+                }
+            }
+        }
+        return data;
+    }
+
+    private static readonly Guid Session = Guid.Parse("6f9c1f3e-2b7a-4c55-9d0e-1a2b3c4d5e6f");
+
+    private static string DriveTo(LaunchLedger ledger, string taskId, OpState state)
+    {
+        var opId = ledger.BeginIntent(taskId);
+        switch (state)
+        {
+            case OpState.Spawned:
+                Apply(ledger, opId, OpState.Spawned);
+                break;
+            case OpState.Exited:
+                Apply(ledger, opId, OpState.Spawned);
+                Apply(ledger, opId, OpState.Exited);
+                break;
+            case OpState.Classified:
+                Apply(ledger, opId, OpState.Spawned);
+                Apply(ledger, opId, OpState.Exited);
+                Apply(ledger, opId, OpState.Classified);
+                break;
+            case OpState.Abandoned:
+            case OpState.Interrupted:
+                Apply(ledger, opId, state);
+                break;
+        }
+        return opId;
+    }
+
+    private static void Apply(LaunchLedger ledger, string opId, OpState to)
+    {
+        switch (to)
+        {
+            case OpState.Spawned:
+                ledger.MarkSpawned(opId, 4242, 133_000_000_000_000_000, Session);
+                break;
+            case OpState.Exited:
+                ledger.MarkExited(opId, 7);
+                break;
+            case OpState.Classified:
+                ledger.Classify(opId, Outcome.Failed, "Run failed");
+                break;
+            case OpState.Abandoned:
+                ledger.Abandon(opId);
+                break;
+            case OpState.Interrupted:
+                ledger.Interrupt(opId);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(to));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(LegalPairs))]
+    public void Transitions_FollowStateMachine(OpState from, OpState to)
+    {
+        var ledger = new LaunchLedger(_store);
+        var opId = DriveTo(ledger, "t1", from);
+
+        Apply(ledger, opId, to);
+
+        Assert.Equal(to, ledger.Get(opId)!.State);
+    }
+
+    [Theory]
+    [MemberData(nameof(IllegalPairs))]
+    public void Transitions_IllegalPairThrows(OpState from, OpState to)
+    {
+        var ledger = new LaunchLedger(_store);
+        var opId = DriveTo(ledger, "t1", from);
+
+        Assert.Throws<InvalidOperationException>(() => Apply(ledger, opId, to));
+
+        Assert.Equal(from, ledger.Get(opId)!.State);
+    }
+
+    [Fact]
+    public void Transitions_UnknownOpThrows()
+    {
+        var ledger = new LaunchLedger(_store);
+
+        Assert.Throws<InvalidOperationException>(() => ledger.Abandon("missing"));
+    }
+
+    [Fact]
+    public void Transitions_RecordProcessExitAndOutcome()
+    {
+        var ledger = new LaunchLedger(_store);
+
+        var opId = DriveTo(ledger, "t1", OpState.Classified);
+
+        var op = ledger.Get(opId)!;
+        Assert.Equal(4242, op.Pid);
+        Assert.Equal(133_000_000_000_000_000, op.ProcCreatedAtFileTime);
+        Assert.Equal(Session, op.SessionId);
+        Assert.Equal(7, op.ExitCode);
+        Assert.Equal(Outcome.Failed, op.Outcome);
+        Assert.Equal("Run failed", op.Reason);
+    }
+
+    [Fact]
+    public void Classify_FreesTaskForNextIntent()
+    {
+        var ledger = new LaunchLedger(_store);
+        var first = DriveTo(ledger, "t1", OpState.Classified);
+
+        var second = ledger.BeginIntent("t1");
+
+        Assert.NotEqual(first, second);
+        Assert.Equal(second, ledger.Live("t1")!.OpId);
+        Assert.Equal(2, ledger.Get(second)!.AttemptNo);
+    }
 }
