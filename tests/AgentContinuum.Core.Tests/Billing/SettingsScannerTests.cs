@@ -90,6 +90,14 @@ public sealed class SettingsScannerTests : IDisposable
         Assert.Equal(["managed: no path"], SettingsScanner.Scan(_userProfile, _worktree, [], _rules).Problems);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(@"ClaudeCode\managed-settings.json")]
+    public void Scan_ManagedPathNotFullyQualified_Fails(string path)
+    {
+        Assert.Equal(["managed: no path"], SettingsScanner.Scan(_userProfile, _worktree, [_managed[0], path], _rules).Problems);
+    }
+
     [Fact]
     public void DefaultManagedPaths_ProgramDataAndProgramFiles()
     {
