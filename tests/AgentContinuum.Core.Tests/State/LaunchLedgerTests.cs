@@ -39,4 +39,25 @@ public sealed class LaunchLedgerTests : IDisposable
         Assert.Equal(1, task.AttemptsUsed);
         Assert.Equal(TaskState.Running, task.State);
     }
+
+    [Fact]
+    public void BeginIntent_CountsAttemptInSameTransaction()
+    {
+        var ledger = new LaunchLedger(_store, checkpoint: point =>
+        {
+            if (point == LaunchLedger.IntentInserted)
+            {
+                throw new IOException("injected");
+            }
+        });
+
+        Assert.Throws<IOException>(() => ledger.BeginIntent("t1"));
+
+        var task = _tasks.Get("t1")!;
+        Assert.Equal(0, task.AttemptsUsed);
+        Assert.Equal(TaskState.Queued, task.State);
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM launch_ops";
+        Assert.Equal(0L, cmd.ExecuteScalar());
+    }
 }
