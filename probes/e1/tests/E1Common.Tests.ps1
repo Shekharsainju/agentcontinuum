@@ -40,3 +40,13 @@ Describe 'Get-E1TextShape' {
   It 'never carries the text' { ($s | ConvertTo-Json) | Should Not Match 'example' }
   It 'distinguishes not logged in' { (Get-E1TextShape 'Not logged in').categories -contains 'not logged in' | Should Be $true }
 }
+
+Describe 'Get-E1KeyPaths' {
+  It 'lists key paths without values' {
+    Set-Content -LiteralPath "$TestDrive\c.json" -Value '{"claudeAiOauth":{"accessToken":"SENTINEL-k3y","expiresAt":1}}'
+    $k = Get-E1KeyPaths -Path "$TestDrive\c.json"
+    $k -contains 'claudeAiOauth.accessToken' | Should Be $true
+    ($k -join ',') | Should Not Match 'SENTINEL'
+  }
+  It 'returns nothing for a missing file' { @(Get-E1KeyPaths -Path "$TestDrive\none.json").Count | Should Be 0 }
+}
