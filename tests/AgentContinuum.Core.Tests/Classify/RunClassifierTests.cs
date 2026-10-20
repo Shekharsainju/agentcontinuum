@@ -154,4 +154,12 @@ public sealed class RunClassifierTests
 
         Assert.Equal(Ambiguous, result);
     }
+
+    [Fact]
+    public void NullRules_Ambiguous()
+    {
+        var result = RunClassifier.Classify(null, Session, [Init(), Result(false, "completed")], NoHooks, 0);
+
+        Assert.Equal(Ambiguous, result);
+    }
 }
