@@ -107,4 +107,22 @@ public sealed class EventFilterTests
         Assert.Null(filter.Accept(ResultLineOfBytes(1024 * 1024 + 1, 'x')));
         Assert.Null(filter.Accept(ResultLineOfBytes(1024 * 1024 + 2, '\u00fc')));
     }
+
+    [Fact]
+    public void Accept_CapsValuesAt200Chars()
+    {
+        var longText = new string('a', 500);
+        var longNumber = new string('9', 500);
+        var line = $$$"""
+            {"type":"{{{longText}}}","subtype":"{{{longText}}}","session_id":"{{{longText}}}","terminal_reason":"{{{longText}}}","rate_limit_info":{"resetsAt":{{{longNumber}}}}}
+            """;
+
+        var filtered = Filter().Accept(line)!;
+
+        Assert.Equal(200, filtered.Type.Length);
+        Assert.Equal(200, filtered.Subtype!.Length);
+        Assert.Equal(200, filtered.SessionId!.Length);
+        Assert.Equal(new string('a', 200), JsonSerializer.Deserialize<string>(filtered.LimitFields["terminal_reason"]));
+        Assert.Equal(200, filtered.LimitFields["rate_limit_info.resetsAt"].Length);
+    }
 }
