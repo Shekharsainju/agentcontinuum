@@ -166,4 +166,34 @@ public sealed class ResetSchedulerTests : IDisposable
         Assert.Equal(TaskState.ResumeOffered, _tasks.Get("t2")!.State);
         Assert.Empty(_scheduler.Tick());
     }
+
+    [Theory]
+    [InlineData(2 * 3600)]
+    [InlineData(-2 * 3600)]
+    [InlineData(121)]
+    public void ClockJump_Logged(int jumpSeconds)
+    {
+        _scheduler.Tick();
+        _clock.Advance(Poll);
+        _clock.JumpWallClock(TimeSpan.FromSeconds(jumpSeconds));
+
+        _scheduler.Tick();
+
+        var message = Assert.Single(_log.Messages);
+        Assert.Contains("clock jump", message);
+        Assert.Contains(jumpSeconds.ToString(), message);
+    }
+
+    [Fact]
+    public void SmallDriftAndSleep_NotLogged()
+    {
+        _scheduler.Tick();
+        _clock.Advance(TimeSpan.FromHours(6));
+        _scheduler.Tick();
+        _clock.Advance(Poll);
+        _clock.JumpWallClock(TimeSpan.FromSeconds(120));
+        _scheduler.Tick();
+
+        Assert.Empty(_log.Messages);
+    }
 }
