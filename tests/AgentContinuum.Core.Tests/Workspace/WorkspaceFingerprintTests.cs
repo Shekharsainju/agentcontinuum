@@ -94,6 +94,26 @@ public sealed class WorkspaceFingerprintTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
+    [Theory]
+    [InlineData(2, 11, false)]
+    [InlineData(1, 11, true)]
+    [InlineData(2, 10, true)]
+    public void Fingerprint_OverLimit_Incomplete(int maxFiles, long maxBytes, bool incomplete)
+    {
+        var result = WorkspaceFingerprint.Compute(_repo.Path, GitRepo.GitExe, maxFiles, maxBytes);
+
+        Assert.Equal(incomplete, result.Incomplete);
+        Assert.Equal(incomplete, result.Hash is null);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public void Fingerprint_DefaultLimits_50000FilesAnd2GB()
+    {
+        Assert.Equal(50_000, WorkspaceFingerprint.MaxFiles);
+        Assert.Equal(2L * 1024 * 1024 * 1024, WorkspaceFingerprint.MaxBytes);
+    }
+
     [Fact]
     public void Fingerprint_IgnoresGitignored()
     {
