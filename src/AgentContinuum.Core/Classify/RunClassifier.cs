@@ -9,6 +9,7 @@ public static class RunClassifier
     public const string CompletedReason = "Completed";
     public const string UsageLimitReason = "Usage limit";
     public const string FailedReason = "Run failed";
+    public const string AmbiguousReason = "Stopped, reason unverified";
 
     public static Classification Classify(
         ClaudeRules? rules,
@@ -25,6 +26,12 @@ public static class RunClassifier
         if (rules?.Limit is { } limitRule && hooks.LastOrDefault(h => IsVerifiedLimit(limitRule, sessionId, h)) is { } limit)
         {
             return new Classification(Outcome.UsageLimit, UsageLimitReason, ResetEpoch(rules, limitRule, limit, stream));
+        }
+
+        // A hook only fires on a stop, so one the limit rule did not confirm is unverified, not a plain failure.
+        if (hooks.Count > 0)
+        {
+            return new Classification(Outcome.Ambiguous, AmbiguousReason, null);
         }
 
         return new Classification(Outcome.Failed, FailedReason, null);
