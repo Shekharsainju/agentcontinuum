@@ -112,4 +112,18 @@ public sealed class TaskRepositoryTests : IDisposable
         Assert.Equal(new string('b', 64), task.CliSha256);
         Assert.Equal("2.1.305", task.CliVersion);
     }
+
+    [Fact]
+    public void TryMoveState_MovesOnlyFromExpectedState()
+    {
+        _tasks.Add(TestTasks.Sample("t1") with { State = TaskState.WaitingForReset });
+
+        var first = _tasks.TryMoveState("t1", TaskState.WaitingForReset, TaskState.ResumeOffered);
+        var second = _tasks.TryMoveState("t1", TaskState.WaitingForReset, TaskState.ResumeOffered);
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.Equal(TaskState.ResumeOffered, _tasks.Get("t1")!.State);
+        Assert.False(_tasks.TryMoveState("missing", TaskState.WaitingForReset, TaskState.ResumeOffered));
+    }
 }
