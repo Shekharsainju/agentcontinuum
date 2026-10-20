@@ -26,7 +26,7 @@ public sealed class BillingProofs
     public BillingVerdict Evaluate(BillingContext ctx)
     {
         var failed = new List<string>();
-        if (!ChildEnvironment.IsAllowlisted(ctx.ChildEnv))
+        if (!ChildEnvironment.IsAllowlisted(ctx.ChildEnv) || !ChildUsesScannedProfile(ctx))
         {
             failed.Add("P1");
         }
@@ -60,6 +60,29 @@ public sealed class BillingProofs
             failed.Add("P6");
         }
         return new BillingVerdict(failed.Count == 0, failed);
+    }
+
+    // Claude Code reads user settings and credentials from the child's USERPROFILE, so P2 and P3 only prove anything
+    // when they scanned that same directory.
+    private static bool ChildUsesScannedProfile(BillingContext ctx)
+    {
+        var childProfile = ctx.ChildEnv
+            .FirstOrDefault(kv => kv.Key.Equals("USERPROFILE", StringComparison.OrdinalIgnoreCase)).Value;
+        if (string.IsNullOrEmpty(childProfile))
+        {
+            return false;
+        }
+        try
+        {
+            return string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(childProfile)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(ctx.UserProfile)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     // An attestation dated in the future fails too: the wall clock cannot be trusted to age it.
