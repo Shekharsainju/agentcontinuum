@@ -233,6 +233,31 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal("Process check failed", _tasks.Get("t1")!.AttentionReason);
     }
 
+    [Fact]
+    public void TaskUpdateFails_OpsStayLive_NextReconcileFinishes()
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _tasks.Add(TestTasks.Sample("t2"));
+        var spawned = _ledger.BeginIntent("t2");
+        _ledger.MarkSpawned(spawned, 100, 1, Guid.NewGuid());
+        _tasks.Add(TestTasks.Sample("t3"));
+        var exited = _ledger.BeginIntent("t3");
+        _ledger.MarkSpawned(exited, 101, 1, Guid.NewGuid());
+        _ledger.MarkExited(exited, 1);
+        Sql("CREATE TRIGGER fail_task_update BEFORE UPDATE ON tasks BEGIN SELECT RAISE(ABORT, 'injected'); END");
+
+        Service().Reconcile();
+        var afterFault = new[] { intent, spawned, exited }.Select(id => _ledger.Get(id)!.State).ToArray();
+        Sql("DROP TRIGGER fail_task_update");
+        Service().Reconcile();
+
+        Assert.Equal([OpState.Intent, OpState.Spawned, OpState.Exited], afterFault);
+        Assert.Equal(
+            [OpState.Abandoned, OpState.Interrupted, OpState.Classified],
+            new[] { intent, spawned, exited }.Select(id => _ledger.Get(id)!.State));
+        Assert.All(_tasks.List(), t => Assert.NotEqual(TaskState.Running, t.State));
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
