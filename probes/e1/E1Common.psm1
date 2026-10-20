@@ -184,4 +184,24 @@ function Invoke-E1StreamRun {
   }
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command, Invoke-E1StreamRun
+function Write-E1Result {
+  <# Writes one probe result file. Refuses if the document still contains an email address. #>
+  param(
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)]$Data,
+    [Parameter(Mandatory)]$Cli,
+    [string]$Dir = (Join-Path $PSScriptRoot 'results')
+  )
+  $doc = [ordered]@{
+    schema       = 'ac-probe-e1/1'
+    captured_utc = [datetime]::UtcNow.ToString('o')
+    cli          = $Cli
+    data         = $Data
+  }
+  $json = $doc | ConvertTo-Json -Depth 12
+  if ($json -match '[^\s"@]+@[^\s"@]+\.[A-Za-z]{2,}') { throw "result '$Name' contains an email address; not written" }
+  New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+  [IO.File]::WriteAllText((Join-Path $Dir "$Name.json"), $json, (New-Object Text.UTF8Encoding($false)))
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command, Invoke-E1StreamRun, Write-E1Result
