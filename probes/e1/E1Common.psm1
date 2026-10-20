@@ -2,6 +2,8 @@ Set-StrictMode -Version 2.0
 
 $script:TimestampPattern = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$'
 $script:EnumeratedPattern = '^[A-Za-z0-9_.:-]{1,40}$'
+$script:GuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+$script:KeptIdKeyPattern = '^(session_?id|sessionId|uuid|parent_?uuid|parentUuid)$'
 
 function Protect-E1Value {
   <# Returns a value safe to record: enumerated strings, timestamps, numbers and booleans as they are; any other string as its length only. #>
@@ -28,6 +30,13 @@ function Add-E1ShapeNode {
     $Shape["$Path[#]"] = $Node.Count
     # One element is enough to learn the schema; more would only add content.
     if ($Node.Count -gt 0) { Add-E1ShapeNode -Shape $Shape -Path "$Path[0]" -Node $Node[0] }
+    return
+  }
+  # A GUID passes the enumerated rule but can name an account or organisation. Only per-session
+  # identifiers are kept, because the limit capture must match a hook's session to its run.
+  $leaf = ($Path -split '[.\]]')[-1]
+  if ($Node -is [string] -and $Node -match $script:GuidPattern -and $leaf -notmatch $script:KeptIdKeyPattern) {
+    $Shape[$Path] = @{ redacted = $true; length = $Node.Length }
     return
   }
   $Shape[$Path] = Protect-E1Value $Node
