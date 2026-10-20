@@ -138,6 +138,23 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal([("t1", (long?)1_800_000_000)], _usageLimits.Calls);
     }
 
+    [Fact]
+    public void ListFails_NeedsAttention()
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _tasks.Add(TestTasks.Sample("t2"));
+        var spawned = _ledger.BeginIntent("t2");
+        _ledger.MarkSpawned(spawned, 100, 1, Guid.NewGuid());
+        _lister.Fail = true;
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Intent, _ledger.Get(intent)!.State);
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Process check failed"), (task.State, task.AttentionReason));
+        Assert.Equal(OpState.Interrupted, _ledger.Get(spawned)!.State);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
