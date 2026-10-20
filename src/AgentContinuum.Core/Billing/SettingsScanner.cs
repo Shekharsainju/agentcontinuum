@@ -29,7 +29,7 @@ public static class SettingsScanner
 
             using (doc)
             {
-                CheckSettings(scope, doc.RootElement, problems);
+                CheckSettings(scope, doc.RootElement, rules, problems);
             }
         }
         return ProofResult.FromProblems(problems);
@@ -54,7 +54,7 @@ public static class SettingsScanner
         }
     }
 
-    private static void CheckSettings(string scope, JsonElement root, List<string> problems)
+    private static void CheckSettings(string scope, JsonElement root, ClaudeRules rules, List<string> problems)
     {
         if (root.TryGetProperty("apiKeyHelper", out _))
         {
@@ -70,6 +70,26 @@ public static class SettingsScanner
                 }
             }
         }
+        foreach (var key in rules.P2ExtraKeys)
+        {
+            if (HasPath(root, key))
+            {
+                problems.Add($"{scope}: {key}");
+            }
+        }
+    }
+
+    private static bool HasPath(JsonElement root, string dottedPath)
+    {
+        var current = root;
+        foreach (var part in dottedPath.Split('.'))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, string? managedPath)
