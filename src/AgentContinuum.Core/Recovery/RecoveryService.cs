@@ -73,7 +73,7 @@ public sealed class RecoveryService
                     _tasks.SetState(op.TaskId, TaskState.NeedsAttention, ProcessCheckFailedReason);
                     return;
                 }
-                RecoverIntent(op, hasProcess);
+                RecoverIntent(op, task, hasProcess);
                 break;
             case OpState.Spawned:
                 _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedRunReason);
@@ -85,18 +85,24 @@ public sealed class RecoveryService
         }
     }
 
-    private void RecoverIntent(LaunchOp op, bool sessionHasProcess)
+    private void RecoverIntent(LaunchOp op, TaskRecord task, bool sessionHasProcess)
     {
         if (sessionHasProcess)
         {
             _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedLaunchReason);
             _ledger.Interrupt(op.OpId);
+            return;
+        }
+
+        if (task.AttemptsUsed >= task.MaxAttempts)
+        {
+            _tasks.SetState(op.TaskId, TaskState.NeedsAttention, OutcomeApplier.AttemptsExhaustedReason);
         }
         else
         {
             _tasks.SetState(op.TaskId, TaskState.WaitingForReset, null);
-            _ledger.Abandon(op.OpId);
         }
+        _ledger.Abandon(op.OpId);
     }
 
     private void RecoverExited(LaunchOp op, TaskRecord task)
