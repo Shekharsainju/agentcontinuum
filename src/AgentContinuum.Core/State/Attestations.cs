@@ -23,7 +23,8 @@ public sealed class Attestations
     public DateTimeOffset? Latest(string kind)
     {
         using var cmd = _store.Connection.CreateCommand();
-        cmd.CommandText = "SELECT max(at_utc) FROM attestations WHERE kind = $kind";
+        // Last recorded, not latest dated: a row written while the clock ran ahead must not outlive a fresh attestation.
+        cmd.CommandText = "SELECT at_utc FROM attestations WHERE kind = $kind ORDER BY rowid DESC LIMIT 1";
         cmd.Parameters.AddWithValue("$kind", kind);
         return cmd.ExecuteScalar() is long at ? DateTimeOffset.FromUnixTimeSeconds(at) : null;
     }
