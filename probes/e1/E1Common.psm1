@@ -76,4 +76,56 @@ function Hide-E1Email {
   $Text -replace '[^\s@:=]+@[^\s@]+\.[A-Za-z]{2,}', '<email>'
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email
+function New-E1StartInfo {
+  param([string]$Exe, [string]$Arguments, [string]$WorkingDirectory, [hashtable]$EnvOverrides, [string[]]$RemoveEnv)
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $Exe
+  $psi.Arguments = $Arguments
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $psi.RedirectStandardInput = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+  $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
+  if ($WorkingDirectory) { $psi.WorkingDirectory = $WorkingDirectory }
+  foreach ($name in @($RemoveEnv)) { if ($name -and $psi.EnvironmentVariables.ContainsKey($name)) { $psi.EnvironmentVariables.Remove($name) } }
+  if ($EnvOverrides) { foreach ($k in $EnvOverrides.Keys) { $psi.EnvironmentVariables[$k] = [string]$EnvOverrides[$k] } }
+  $psi
+}
+
+function Stop-E1ProcessTree {
+  param([Parameter(Mandatory)][int]$ProcessId)
+  # Windows PowerShell's Process.Kill() cannot take the tree, and the CLI may have children.
+  [void](& taskkill.exe /T /F /PID $ProcessId 2>&1)
+}
+
+function Invoke-E1Command {
+  <# Runs a command with stdin closed, an optional environment change and a timeout. Returns its output for the caller to shape. #>
+  param(
+    [Parameter(Mandatory)][string]$Exe,
+    [string]$Arguments = '',
+    [int]$TimeoutSeconds = 30,
+    [string]$WorkingDirectory,
+    [hashtable]$EnvOverrides,
+    [string[]]$RemoveEnv
+  )
+  $psi = New-E1StartInfo -Exe $Exe -Arguments $Arguments -WorkingDirectory $WorkingDirectory -EnvOverrides $EnvOverrides -RemoveEnv $RemoveEnv
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $p = [Diagnostics.Process]::Start($psi)
+  $p.StandardInput.Close()
+  $out = $p.StandardOutput.ReadToEndAsync()
+  $err = $p.StandardError.ReadToEndAsync()
+  $timedOut = -not $p.WaitForExit($TimeoutSeconds * 1000)
+  if ($timedOut) { Stop-E1ProcessTree -ProcessId $p.Id; [void]$p.WaitForExit(5000) }
+  [void]$out.Wait(5000); [void]$err.Wait(5000)
+  [ordered]@{
+    exit_code = if ($timedOut) { $null } else { $p.ExitCode }
+    stdout    = if ($out.IsCompleted) { $out.Result } else { '' }
+    stderr    = if ($err.IsCompleted) { $err.Result } else { '' }
+    timed_out = $timedOut
+    seconds   = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+  }
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command
