@@ -132,3 +132,10 @@ Describe 'Get-E1Cli' {
   }
   It 'throws when the command is missing' { { Get-E1Cli -Command 'no-such-cli-e1' } | Should Throw }
 }
+
+Describe 'ConvertTo-E1Shape identifiers' {
+  $s = ConvertTo-E1Shape '{"orgId":"b6e01652-26b9-4a54-95c1-87d0c76d21b7","session_id":"0f6c2a4e-1111-4a54-95c1-87d0c76d21b7","m":{"uuid":"1f6c2a4e-1111-4a54-95c1-87d0c76d21b7"}}'
+  It 'redacts an account identifier' { $s['orgId'].redacted | Should Be $true }
+  It 'keeps a session id' { $s['session_id'] | Should Be '0f6c2a4e-1111-4a54-95c1-87d0c76d21b7' }
+  It 'keeps a message uuid' { $s['m.uuid'] | Should Be '1f6c2a4e-1111-4a54-95c1-87d0c76d21b7' }
+}
