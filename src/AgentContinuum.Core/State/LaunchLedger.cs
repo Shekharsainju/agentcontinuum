@@ -27,9 +27,13 @@ public sealed class LaunchLedger
     {
         var opId = Guid.NewGuid().ToString("N");
 
-        var attemptsUsed = Scalar(tx, "SELECT attempts_used FROM tasks WHERE task_id = $task_id", ("$task_id", taskId)) is long used
-            ? used
-            : throw new InvalidOperationException($"No task {taskId}.");
+        var (attemptsUsed, maxAttempts) = Attempts(tx, taskId);
+
+        // Pre-flight checks this too; repeating it here keeps I3 inside the transaction that counts.
+        if (attemptsUsed >= maxAttempts)
+        {
+            throw new InvalidOperationException($"Task {taskId} has used {attemptsUsed} of {maxAttempts} attempts.");
+        }
 
         if (LiveOp(tx, taskId) is { } live)
         {
@@ -67,6 +71,17 @@ public sealed class LaunchLedger
         return reader.Read() ? Read(reader) : null;
     }
 
+    public LaunchOp? Live(string taskId) => LiveOp(null, taskId);
+
+    private (long Used, long Max) Attempts(SqliteTransaction tx, string taskId)
+    {
+        using var cmd = Command(tx, "SELECT attempts_used, max_attempts FROM tasks WHERE task_id = $task_id", [("$task_id", taskId)]);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read()
+            ? (reader.GetInt64(0), reader.GetInt64(1))
+            : throw new InvalidOperationException($"No task {taskId}.");
+    }
+
     private LaunchOp? LiveOp(SqliteTransaction? tx, string taskId)
     {
         using var cmd = Command(
@@ -95,11 +110,6 @@ public sealed class LaunchLedger
         return cmd.ExecuteNonQuery();
     }
 
-    private object? Scalar(SqliteTransaction? tx, string sql, params (string Name, object? Value)[] values)
-    {
-        using var cmd = Command(tx, sql, values);
-        return cmd.ExecuteScalar();
-    }
 
     private static LaunchOp Read(SqliteDataReader r) => new(
         OpId: r.GetString(0),
