@@ -21,6 +21,18 @@ if (!File.Exists(scenarioPath))
 var scenario = JsonNode.Parse(File.ReadAllText(scenarioPath))!.AsObject();
 var sessionId = options.SessionId ?? options.Resume ?? "";
 
+using (var stdin = new MemoryStream())
+{
+    Console.OpenStandardInput().CopyTo(stdin);
+    var record = new JsonObject
+    {
+        ["args"] = new JsonArray(args.Select(a => (JsonNode?)a).ToArray()),
+        ["envNames"] = new JsonArray(Environment.GetEnvironmentVariables().Keys.Cast<string>().Order().Select(n => (JsonNode?)n).ToArray()),
+        ["stdinLength"] = stdin.Length,
+    };
+    File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "fake-claude-args.json"), record.ToJsonString());
+}
+
 if (scenario["authSource"]?.GetValue<string>() is { } authSource)
 {
     Emit(new JsonObject { ["type"] = "system", ["subtype"] = "init", ["session_id"] = sessionId, ["apiKeySource"] = authSource });
