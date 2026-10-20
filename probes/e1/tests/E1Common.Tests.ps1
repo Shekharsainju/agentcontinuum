@@ -121,3 +121,14 @@ Describe 'Write-E1Result' {
     Test-Path "$TestDrive\res\leak.json" | Should Be $false
   }
 }
+
+Describe 'Get-E1Cli' {
+  It 'resolves the path and parses the version' {
+    Set-Content -LiteralPath "$TestDrive\fakecli.cmd" -Value '@echo 9.9.9 (Claude Code)'
+    $c = Get-E1Cli -Command "$TestDrive\fakecli.cmd"
+    $c.version | Should Be '9.9.9'
+    $c.path | Should Be "$TestDrive\fakecli.cmd"
+    $c.is_exe | Should Be $false
+  }
+  It 'throws when the command is missing' { { Get-E1Cli -Command 'no-such-cli-e1' } | Should Throw }
+}
