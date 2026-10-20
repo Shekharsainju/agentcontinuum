@@ -74,6 +74,9 @@ public sealed class TaskRepository
     public void SetState(string taskId, TaskState state, string? reason) =>
         Update(taskId, "state = $state, attention_reason = $reason", ("$state", StateText.ToText(state)), ("$reason", reason));
 
+    public void SetSchedule(string taskId, long? resetEpoch, long? permittedEpoch) =>
+        Update(taskId, "reset_expected_at = $reset, attempt_permitted_at = $permitted", ("$reset", resetEpoch), ("$permitted", permittedEpoch));
+
     private void Update(string taskId, string assignments, params (string Name, object? Value)[] values)
     {
         using var cmd = _store.Connection.CreateCommand();
