@@ -106,3 +106,18 @@ if ($LingerSeconds) { Start-Sleep -Seconds $LingerSeconds }
     $r.seconds_final_to_exit -lt 15 | Should Be $true
   }
 }
+
+Describe 'Write-E1Result' {
+  $cli = [ordered]@{ path = 'C:\x\claude.exe'; target = $null; version = '2.1.304' }
+  It 'writes the schema, CLI identity and data' {
+    Write-E1Result -Name 'static' -Data @{ answer = 1 } -Cli $cli -Dir "$TestDrive\res"
+    $j = Get-Content "$TestDrive\res\static.json" -Raw | ConvertFrom-Json
+    $j.schema | Should Be 'ac-probe-e1/1'
+    $j.cli.version | Should Be '2.1.304'
+    $j.data.answer | Should Be 1
+  }
+  It 'refuses to write an email address' {
+    { Write-E1Result -Name 'leak' -Data @{ who = 'me@example.com' } -Cli $cli -Dir "$TestDrive\res" } | Should Throw
+    Test-Path "$TestDrive\res\leak.json" | Should Be $false
+  }
+}
