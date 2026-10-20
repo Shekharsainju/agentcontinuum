@@ -68,7 +68,8 @@ public sealed class BillingProofs
     {
         var childProfile = ctx.ChildEnv
             .FirstOrDefault(kv => kv.Key.Equals("USERPROFILE", StringComparison.OrdinalIgnoreCase)).Value;
-        if (string.IsNullOrEmpty(childProfile))
+        // A relative profile resolves against the child's working directory, not ours, so the comparison means nothing.
+        if (string.IsNullOrEmpty(childProfile) || !Path.IsPathFullyQualified(childProfile) || !Path.IsPathFullyQualified(ctx.UserProfile))
         {
             return false;
         }
