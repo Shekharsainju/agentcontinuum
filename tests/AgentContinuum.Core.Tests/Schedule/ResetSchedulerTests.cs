@@ -154,4 +154,16 @@ public sealed class ResetSchedulerTests : IDisposable
         Assert.Single(onWake);
         Assert.Empty(after);
     }
+
+    [Fact]
+    public void WaitingWithoutSchedule_OffersAtOnceAsLaunchNotStarted()
+    {
+        _tasks.Add(TestTasks.Sample("t2") with { State = TaskState.WaitingForReset, AttemptsUsed = 1 });
+
+        var offer = Assert.Single(_scheduler.Tick());
+
+        Assert.Equal(("t2", true, false), (offer.TaskId, offer.LaunchDidNotStart, offer.ResetTimeUnknown));
+        Assert.Equal(TaskState.ResumeOffered, _tasks.Get("t2")!.State);
+        Assert.Empty(_scheduler.Tick());
+    }
 }
