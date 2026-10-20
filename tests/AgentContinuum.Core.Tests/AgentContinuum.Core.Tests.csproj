@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgentContinuum.Core\AgentContinuum.Core.csproj" />
+    <ProjectReference Include="..\FakeClaude\FakeClaude.csproj" />
   </ItemGroup>
 
 </Project>
