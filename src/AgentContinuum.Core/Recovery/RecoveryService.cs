@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Model;
@@ -12,6 +13,7 @@ public sealed class RecoveryService
     public const string InterruptedLaunchReason = "Interrupted launch";
     public const string InterruptedRunReason = "Interrupted run";
     public const string ProcessCheckFailedReason = "Process check failed";
+    public const string RecoveryFailedReason = "Recovery failed";
 
     private readonly StateStore _store;
     private readonly LaunchLedger _ledger;
@@ -37,44 +39,49 @@ public sealed class RecoveryService
     }
 
     // Each row updates the task before moving the op out of its live state. A crash in between leaves the op
-    // live, so the next Reconcile repeats the same step instead of stranding the task.
+    // live, so the next Reconcile repeats the same step instead of stranding the task. A failure on one op
+    // leaves that op live and flags its task, so the remaining ops are still recovered.
     public void Reconcile()
     {
-        IReadOnlyList<ProcessInfo>? processes = null;
-        var listFailed = false;
+        var processes = new Lazy<IReadOnlyList<ProcessInfo>?>(ListProcesses);
         foreach (var op in _ledger.AllLive())
         {
-            var task = _tasks.Get(op.TaskId) ?? throw new InvalidOperationException($"No task {op.TaskId}.");
-            switch (op.State)
+            try
             {
-                case OpState.Intent:
-                    if (processes is null && !listFailed)
-                    {
-                        try
-                        {
-                            processes = _lister.ListOwnProcesses();
-                        }
-                        catch (ProcessListException)
-                        {
-                            listFailed = true;
-                        }
-                    }
-                    if (processes is null)
-                    {
-                        // The op stays INTENT: without a process list it is unknown whether work happened.
-                        _tasks.SetState(op.TaskId, TaskState.NeedsAttention, ProcessCheckFailedReason);
-                        break;
-                    }
-                    RecoverIntent(op, task, processes);
-                    break;
-                case OpState.Spawned:
-                    _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedRunReason);
-                    _ledger.Interrupt(op.OpId);
-                    break;
-                case OpState.Exited:
-                    RecoverExited(op, task);
-                    break;
+                Recover(op, processes);
             }
+            catch (Exception)
+            {
+                TryFlag(op.TaskId, RecoveryFailedReason);
+            }
+        }
+    }
+
+    private void Recover(LaunchOp op, Lazy<IReadOnlyList<ProcessInfo>?> processes)
+    {
+        if (_tasks.Get(op.TaskId) is not { } task)
+        {
+            return;
+        }
+
+        switch (op.State)
+        {
+            case OpState.Intent:
+                if (processes.Value is not { } list)
+                {
+                    // The op stays INTENT: without a process list it is unknown whether work happened.
+                    _tasks.SetState(op.TaskId, TaskState.NeedsAttention, ProcessCheckFailedReason);
+                    return;
+                }
+                RecoverIntent(op, task, list);
+                break;
+            case OpState.Spawned:
+                _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedRunReason);
+                _ledger.Interrupt(op.OpId);
+                break;
+            case OpState.Exited:
+                RecoverExited(op, task);
+                break;
         }
     }
 
@@ -94,14 +101,46 @@ public sealed class RecoveryService
 
     private void RecoverExited(LaunchOp op, TaskRecord task)
     {
-        var classification = RunClassifier.Classify(
-            _rulesFor(task.CliVersion),
-            task.SessionId,
-            StreamEventLog.ForOp(_store, op.OpId),
-            HookRecorder.ForOp(_store, op.OpId),
-            op.ExitCode ?? -1);
+        Classification classification;
+        try
+        {
+            classification = RunClassifier.Classify(
+                _rulesFor(task.CliVersion),
+                task.SessionId,
+                StreamEventLog.ForOp(_store, op.OpId),
+                HookRecorder.ForOp(_store, op.OpId),
+                op.ExitCode ?? -1);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            classification = new Classification(Outcome.Ambiguous, RunClassifier.AmbiguousReason, null);
+        }
         _outcomes.Apply(op.TaskId, classification);
         _ledger.Classify(op.OpId, classification.Outcome, classification.Reason);
+    }
+
+    // Any lister failure counts as an unknown process state, not only the documented exception.
+    private IReadOnlyList<ProcessInfo>? ListProcesses()
+    {
+        try
+        {
+            return _lister.ListOwnProcesses();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void TryFlag(string taskId, string reason)
+    {
+        try
+        {
+            _tasks.SetState(taskId, TaskState.NeedsAttention, reason);
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private static bool HasSessionProcess(IReadOnlyList<ProcessInfo> processes, Guid sessionId)

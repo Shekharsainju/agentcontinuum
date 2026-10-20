@@ -29,7 +29,7 @@ public static class StreamEventLog
         var events = new List<FilteredEvent>();
         while (reader.Read())
         {
-            events.Add(JsonSerializer.Deserialize<FilteredEvent>(reader.GetString(0))!);
+            events.Add(JsonSerializer.Deserialize<FilteredEvent>(reader.GetString(0)) ?? throw new JsonException("Empty stream event row."));
         }
         return events;
     }
