@@ -29,3 +29,14 @@ Describe 'ConvertTo-E1Shape' {
   }
   It 'returns a parse marker for invalid JSON' { (ConvertTo-E1Shape '{"a":')['_parse_error'] | Should Be $true }
 }
+
+Describe 'Get-E1TextShape' {
+  $s = Get-E1TextShape "Logged in as me@example.com`nPlan: Claude Max"
+  It 'finds category words' {
+    $s.categories -contains 'logged in' | Should Be $true
+    $s.categories -contains 'claude max' | Should Be $true
+  }
+  It 'counts lines and length' { $s.lines | Should Be 2; $s.length | Should Be 44 }
+  It 'never carries the text' { ($s | ConvertTo-Json) | Should Not Match 'example' }
+  It 'distinguishes not logged in' { (Get-E1TextShape 'Not logged in').categories -contains 'not logged in' | Should Be $true }
+}
