@@ -1,6 +1,5 @@
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Model;
-using AgentContinuum.Core.Schedule;
 using AgentContinuum.Core.State;
 
 namespace AgentContinuum.Core.Tests.Classify;
@@ -67,12 +66,5 @@ public sealed class OutcomeApplierTests : IDisposable
         var task = _tasks.Get("t1")!;
         Assert.Equal((TaskState.NeedsAttention, reason), (task.State, task.AttentionReason));
         Assert.Empty(_usageLimits.Calls);
-    }
-
-    private sealed class RecordingUsageLimits : IUsageLimitHandler
-    {
-        public List<(string TaskId, long? ResetEpoch)> Calls { get; } = [];
-
-        public void OnUsageLimit(string taskId, long? resetEpoch) => Calls.Add((taskId, resetEpoch));
     }
 }
