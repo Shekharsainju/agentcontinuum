@@ -16,29 +16,60 @@ public static class SettingsScanner
         var problems = new List<string>();
         foreach (var (scope, path) in Scopes(userProfile, worktree, managedPath))
         {
-            if (!File.Exists(path))
+            if (!File.Exists(path) && !Directory.Exists(path))
             {
                 continue;
             }
 
-            using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-            var root = doc.RootElement;
-            if (root.TryGetProperty("apiKeyHelper", out _))
+            if (Read(path) is not { } doc)
             {
-                problems.Add($"{scope}: apiKeyHelper");
+                problems.Add($"{scope}: unreadable");
+                continue;
             }
-            if (root.TryGetProperty("env", out var env) && env.ValueKind == JsonValueKind.Object)
+
+            using (doc)
             {
-                foreach (var variable in env.EnumerateObject())
-                {
-                    if (BillingVariables.Contains(variable.Name, StringComparer.OrdinalIgnoreCase))
-                    {
-                        problems.Add($"{scope}: env.{variable.Name.ToUpperInvariant()}");
-                    }
-                }
+                CheckSettings(scope, doc.RootElement, problems);
             }
         }
         return ProofResult.FromProblems(problems);
+    }
+
+    // A file Claude Code might read but this scan cannot is a failure, never a pass.
+    private static JsonDocument? Read(string path)
+    {
+        try
+        {
+            var doc = JsonDocument.Parse(File.ReadAllBytes(path));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                return doc;
+            }
+            doc.Dispose();
+            return null;
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static void CheckSettings(string scope, JsonElement root, List<string> problems)
+    {
+        if (root.TryGetProperty("apiKeyHelper", out _))
+        {
+            problems.Add($"{scope}: apiKeyHelper");
+        }
+        if (root.TryGetProperty("env", out var env) && env.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var variable in env.EnumerateObject())
+            {
+                if (BillingVariables.Contains(variable.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    problems.Add($"{scope}: env.{variable.Name.ToUpperInvariant()}");
+                }
+            }
+        }
     }
 
     private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, string? managedPath)
