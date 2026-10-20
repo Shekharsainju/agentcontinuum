@@ -6,6 +6,8 @@ namespace AgentContinuum.Core.Events;
 
 public sealed class EventFilter
 {
+    public const int MaxLineBytes = 1024 * 1024;
+
     private const string TypeField = "type";
     private const string SubtypeField = "subtype";
     private const string SessionIdField = "session_id";
@@ -40,6 +42,11 @@ public sealed class EventFilter
 
     public FilteredEvent? Accept(string line)
     {
+        if (Encoding.UTF8.GetByteCount(line) > MaxLineBytes)
+        {
+            return null;
+        }
+
         try
         {
             var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(line));
