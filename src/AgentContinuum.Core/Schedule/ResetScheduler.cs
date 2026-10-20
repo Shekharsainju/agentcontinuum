@@ -25,4 +25,22 @@ public sealed class ResetScheduler : IUsageLimitHandler
         _tasks.SetSchedule(taskId, resetEpoch, permitted);
         _tasks.SetState(taskId, TaskState.WaitingForReset, null);
     }
+
+    // The move to RESUME_OFFERED is guarded on WAITING_FOR_RESET, so a task is offered at most once per wait.
+    public IReadOnlyList<Offer> Tick()
+    {
+        var now = _clock.UtcNow.ToUnixTimeSeconds();
+        var offers = new List<Offer>();
+        foreach (var task in _tasks.List())
+        {
+            if (task.State == TaskState.WaitingForReset
+                && task.AttemptPermittedAtEpoch is { } permitted
+                && now >= permitted
+                && _tasks.TryMoveState(task.TaskId, TaskState.WaitingForReset, TaskState.ResumeOffered))
+            {
+                offers.Add(new Offer(task.TaskId, task.Label, task.ResetExpectedAtEpoch is null));
+            }
+        }
+        return offers;
+    }
 }
