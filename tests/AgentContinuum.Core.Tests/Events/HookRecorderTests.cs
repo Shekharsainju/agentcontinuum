@@ -49,6 +49,41 @@ public sealed class HookRecorderTests : IDisposable
         Assert.Empty(HookRecorder.ForOp(_store, "op2"));
     }
 
+    private static string PayloadOfBytes(int totalBytes)
+    {
+        var head = $$"""{"hook_event_name":"StopFailure","session_id":"{{SessionId}}","pad":" """;
+        const string tail = "\"}";
+        var payload = head + new string('x', totalBytes - Encoding.UTF8.GetByteCount(head) - tail.Length) + tail;
+        Assert.Equal(totalBytes, Encoding.UTF8.GetByteCount(payload));
+        return payload;
+    }
+
+    private string[] EventKinds()
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = "SELECT kind || ':' || fields_json FROM events ORDER BY id";
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<string>();
+        while (reader.Read())
+        {
+            rows.Add(reader.GetString(0));
+        }
+        return rows.ToArray();
+    }
+
+    [Fact]
+    public void HookRecorder_OversizedInput_RecordsHookErrorOnly()
+    {
+        HookRecorder.Record(_store, "op1", Input(PayloadOfBytes(64 * 1024)), Rules);
+        HookRecorder.Record(_store, "op2", Input(PayloadOfBytes(64 * 1024 + 1)), Rules);
+
+        Assert.Equal("StopFailure", Assert.Single(HookRecorder.ForOp(_store, "op1")).HookName);
+        var error = Assert.Single(HookRecorder.ForOp(_store, "op2"));
+        Assert.Equal((HookRecorder.HookErrorKind, (string?)null), (error.HookName, error.SessionId));
+        Assert.Empty(error.Fields);
+        Assert.Equal("hook_error:{}", EventKinds()[1]);
+    }
+
     [Fact]
     public void HookRecorder_DropsSentinelPayload()
     {
