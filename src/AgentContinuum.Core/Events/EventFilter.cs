@@ -7,6 +7,7 @@ namespace AgentContinuum.Core.Events;
 public sealed class EventFilter
 {
     public const int MaxLineBytes = 1024 * 1024;
+    public const int MaxValueChars = 200;
 
     private const string TypeField = "type";
     private const string SubtypeField = "subtype";
@@ -159,11 +160,13 @@ public sealed class EventFilter
 
         public static JsonScalar Read(ref Utf8JsonReader reader) => reader.TokenType switch
         {
-            JsonTokenType.String => new(JsonTokenType.String, reader.GetString()!),
+            JsonTokenType.String => new(JsonTokenType.String, Cap(reader.GetString()!)),
             JsonTokenType.True => new(JsonTokenType.True, "true"),
             JsonTokenType.False => new(JsonTokenType.False, "false"),
             JsonTokenType.Null => new(JsonTokenType.Null, "null"),
-            _ => new(reader.TokenType, Encoding.UTF8.GetString(reader.ValueSpan)),
+            _ => new(reader.TokenType, Cap(Encoding.UTF8.GetString(reader.ValueSpan))),
         };
+
+        private static string Cap(string value) => value.Length > MaxValueChars ? value[..MaxValueChars] : value;
     }
 }
