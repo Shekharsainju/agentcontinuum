@@ -32,7 +32,16 @@ public sealed class BillingProofsTests : IDisposable
             @"C:\cli",
             @"C:\git"));
         _runner.Result = new CommandResult(0, SubscriptionStatus, false);
+        WriteProfileFile(CredentialsFile, Credentials);
+        WriteProfileFile(".claude.json", """{"oauthAccount":{"emailAddress":"SENTINEL-p3@example.com"},"theme":"dark"}""");
     }
+
+    private const string Credentials =
+        """{"claudeAiOauth":{"accessToken":"SENTINEL-p3","refreshToken":"SENTINEL-p3","subscriptionType":"SENTINEL-p3"}}""";
+
+    private static readonly string CredentialsFile = Path.Combine(".claude", ".credentials.json");
+
+    private ProofResult CheckP3() => CredentialCheck.Check(_userProfile, _rules!.P3!);
 
     public void Dispose()
     {
@@ -60,7 +69,57 @@ public sealed class BillingProofsTests : IDisposable
             case "P2":
                 WriteProfileFile(Path.Combine(".claude", "settings.json"), """{"apiKeyHelper":"x"}""");
                 break;
+            case "P3":
+                File.Delete(Path.Combine(_userProfile, CredentialsFile));
+                break;
+            case "P3_RULE":
+                _rules = _rules! with { P3 = null };
+                break;
         }
+    }
+
+    [Fact]
+    public void P3_KeyNamesOnly()
+    {
+        var pass = CheckP3();
+        WriteProfileFile(CredentialsFile, """{"claudeAiOauth":{"accessToken":"SENTINEL-p3"}}""");
+        var fail = CheckP3();
+
+        Assert.True(pass.Pass);
+        Assert.False(fail.Pass);
+        Assert.Equal(["credentials: no claudeAiOauth.subscriptionType"], fail.Problems);
+        Assert.DoesNotContain("SENTINEL-p3", System.Text.Json.JsonSerializer.Serialize(new[] { pass, fail }));
+    }
+
+    [Fact]
+    public void P3_ApiKeyStored_Fails()
+    {
+        WriteProfileFile(".claude.json", """{"oauthAccount":{},"primaryApiKey":"SENTINEL-p3"}""");
+
+        Assert.Equal(["api key file: primaryApiKey"], CheckP3().Problems);
+    }
+
+    [Theory]
+    [InlineData(null, "credentials: missing")]
+    [InlineData("not json", "credentials: unreadable")]
+    [InlineData("[]", "credentials: unreadable")]
+    public void P3_CredentialsMissingOrUnreadable_Fails(string? content, string problem)
+    {
+        File.Delete(Path.Combine(_userProfile, CredentialsFile));
+        if (content is not null)
+        {
+            WriteProfileFile(CredentialsFile, content);
+        }
+
+        Assert.Equal([problem], CheckP3().Problems);
+    }
+
+    [Fact]
+    public void P3_ApiKeyFileUnreadable_Fails()
+    {
+        WriteProfileFile(".claude.json", "{");
+
+        Assert.Equal(["api key file: unreadable"], CheckP3().Problems);
     }
 
     [Fact]
@@ -75,6 +134,8 @@ public sealed class BillingProofsTests : IDisposable
     [Theory]
     [InlineData("P1", "P1")]
     [InlineData("P2", "P2")]
+    [InlineData("P3", "P3")]
+    [InlineData("P3_RULE", "P3_UNEVALUABLE")]
     public void EachProofAloneBlocks(string proof, string failed)
     {
         Break(proof);
