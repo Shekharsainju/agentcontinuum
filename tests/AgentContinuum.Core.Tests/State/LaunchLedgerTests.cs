@@ -60,4 +60,15 @@ public sealed class LaunchLedgerTests : IDisposable
         cmd.CommandText = "SELECT count(*) FROM launch_ops";
         Assert.Equal(0L, cmd.ExecuteScalar());
     }
+
+    [Fact]
+    public void BeginIntent_SecondLiveIntentThrows()
+    {
+        var ledger = new LaunchLedger(_store);
+        ledger.BeginIntent("t1");
+
+        Assert.Throws<InvalidOperationException>(() => ledger.BeginIntent("t1"));
+
+        Assert.Equal(1, _tasks.Get("t1")!.AttemptsUsed);
+    }
 }
