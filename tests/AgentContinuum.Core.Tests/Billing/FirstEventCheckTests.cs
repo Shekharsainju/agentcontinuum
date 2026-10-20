@@ -55,9 +55,10 @@ public sealed class FirstEventCheckTests
     }
 
     [Fact]
-    public void Over_LaterApiKeyInitAfterVerified_StaysVerified()
+    public void Over_LaterApiKeyInitAfterVerified_Mismatch()
     {
-        Assert.Equal(FirstEventStatus.Verified, FirstEventCheck.Over([Init, ApiKeyInit], Rules));
+        Assert.Equal(FirstEventStatus.Mismatch, FirstEventCheck.Over([Init, ApiKeyInit], Rules));
+        Assert.Equal(FirstEventStatus.Verified, FirstEventCheck.Over([Init, Init], Rules));
     }
 
     [Fact]
