@@ -1,4 +1,5 @@
 using AgentContinuum.Core.Model;
+using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Preflight;
 
 namespace AgentContinuum.Core.Tests.Preflight;
@@ -154,6 +155,54 @@ public sealed class PreflightRunnerTests : IDisposable
         };
 
         Assert.Equal(["ATTEMPTS_EXHAUSTED"], Run(now: true).Reasons);
+    }
+
+    [Theory]
+    [InlineData("--resume")]
+    [InlineData("--session-id")]
+    public void Preflight_ProcessWithSessionId_ProcessLive(string flag)
+    {
+        _f.Lister.Processes.Add(new ProcessInfo(7, 2, @"C:\other\node.exe",
+            $"node.exe cli.js -p {flag} {_f.Task.SessionId.ToString("D").ToUpperInvariant()}"));
+
+        Assert.Equal(["PROCESS_LIVE"], Run().Reasons);
+    }
+
+    [Theory]
+    [InlineData("expected")]
+    [InlineData("unexpected")]
+    public void Preflight_ListerThrows_ProcessUnknown(string kind)
+    {
+        _f.Lister.Throw = kind == "expected"
+            ? new ProcessListException("denied")
+            : new InvalidOperationException("boom");
+
+        Assert.Equal(["PROCESS_UNKNOWN"], Run().Reasons);
+    }
+
+    [Fact]
+    public void Preflight_EmptyProcessList_ProcessUnknown()
+    {
+        _f.Lister.Processes.Clear();
+
+        Assert.Equal(["PROCESS_UNKNOWN"], Run().Reasons);
+    }
+
+    [Theory]
+    [InlineData("cli", "PROCESS_UNKNOWN")]
+    [InlineData("unreadable", "PROCESS_UNKNOWN")]
+    [InlineData("other", null)]
+    public void Preflight_ProcessWithUnreadableCommandLine(string exe, string? reason)
+    {
+        var path = exe switch
+        {
+            "cli" => _f.Task.CliPath.ToUpperInvariant(),
+            "other" => @"C:\Windows\System32\svchost.exe",
+            _ => null,
+        };
+        _f.Lister.Processes.Add(new ProcessInfo(8, 3, path, null));
+
+        Assert.Equal(reason is null ? [] : [reason], Run().Reasons);
     }
 
     [Fact]
