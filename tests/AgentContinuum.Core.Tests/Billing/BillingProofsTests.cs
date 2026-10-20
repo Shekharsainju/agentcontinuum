@@ -81,6 +81,9 @@ public sealed class BillingProofsTests : IDisposable
             case "P4_RULE":
                 _rules = _rules! with { P4 = null };
                 break;
+            case "P5_RULE":
+                _rules = _rules! with { P5 = null };
+                break;
         }
     }
 
@@ -120,6 +123,18 @@ public sealed class BillingProofsTests : IDisposable
         _runner.Result = new CommandResult(exitCode, stdout, false);
 
         Assert.Equal(["P4"], Evaluate().FailedProofs);
+    }
+
+    [Fact]
+    public void NullRules_P3P4P5Unevaluable()
+    {
+        _rules = null;
+
+        var verdict = Evaluate();
+
+        Assert.False(verdict.Verified);
+        Assert.Equal(["P3_UNEVALUABLE", "P4_UNEVALUABLE", "P5_UNEVALUABLE"], verdict.FailedProofs);
+        Assert.Empty(_runner.Calls);
     }
 
     [Fact]
@@ -190,6 +205,7 @@ public sealed class BillingProofsTests : IDisposable
     [InlineData("P3_RULE", "P3_UNEVALUABLE")]
     [InlineData("P4", "P4")]
     [InlineData("P4_RULE", "P4_UNEVALUABLE")]
+    [InlineData("P5_RULE", "P5_UNEVALUABLE")]
     public void EachProofAloneBlocks(string proof, string failed)
     {
         Break(proof);
