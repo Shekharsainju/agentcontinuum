@@ -74,6 +74,16 @@ public sealed class TaskRepository
     public void SetState(string taskId, TaskState state, string? reason) =>
         Update(taskId, "state = $state, attention_reason = $reason", ("$state", StateText.ToText(state)), ("$reason", reason));
 
+    public bool TryMoveState(string taskId, TaskState from, TaskState to)
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE tasks SET state = $to WHERE task_id = $task_id AND state = $from";
+        cmd.Parameters.AddWithValue("$task_id", taskId);
+        cmd.Parameters.AddWithValue("$from", StateText.ToText(from));
+        cmd.Parameters.AddWithValue("$to", StateText.ToText(to));
+        return cmd.ExecuteNonQuery() == 1;
+    }
+
     public void SetSchedule(string taskId, long? resetEpoch, long? permittedEpoch) =>
         Update(taskId, "reset_expected_at = $reset, attempt_permitted_at = $permitted", ("$reset", resetEpoch), ("$permitted", permittedEpoch));
 
