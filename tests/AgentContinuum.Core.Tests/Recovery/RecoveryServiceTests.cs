@@ -315,6 +315,20 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal((TaskState.NeedsAttention, "Attempts exhausted"), (task.State, task.AttentionReason));
     }
 
+    [Fact]
+    public void RunningTaskWithoutLiveOp_NeedsAttention()
+    {
+        _tasks.Add(TestTasks.Sample("t2") with { State = TaskState.Running, AttemptsUsed = 1 });
+        _tasks.Add(TestTasks.Sample("t3") with { State = TaskState.WaitingForReset });
+
+        Service().Reconcile();
+
+        var stranded = _tasks.Get("t2")!;
+        Assert.Equal((TaskState.NeedsAttention, "Interrupted run"), (stranded.State, stranded.AttentionReason));
+        Assert.Equal(TaskState.WaitingForReset, _tasks.Get("t3")!.State);
+        Assert.Equal(TaskState.Queued, _tasks.Get("t1")!.State);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
