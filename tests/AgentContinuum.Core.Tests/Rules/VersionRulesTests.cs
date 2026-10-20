@@ -30,4 +30,37 @@ public sealed class VersionRulesTests
         Assert.Equal(JsonValueKind.False, entry.Usage.Overage.SafeInUse[0].ValueKind);
         Assert.Null(entry.Limit);
     }
+
+    private static string Entry(string versions) => $$"""{ "versions": "{{versions}}", "p2ExtraKeys": [] }""";
+
+    [Fact]
+    public void For_MatchesRange()
+    {
+        var rules = VersionRules.Load($"[{Entry(">=2.1.0 <2.2.0")}, {Entry(">=2.2.0 <3.0.0")}]");
+
+        Assert.NotNull(VersionRules.For("2.1.304"));
+        Assert.Equal(">=2.1.0 <2.2.0", rules.Match("2.1.999")!.Versions);
+        Assert.Equal(">=2.2.0 <3.0.0", rules.Match("2.2.0")!.Versions);
+    }
+
+    [Theory]
+    [InlineData("2.1.303")]
+    [InlineData("2.1.305")]
+    [InlineData("2.1")]
+    [InlineData("2.1.304-beta")]
+    [InlineData("")]
+    public void For_UnknownVersion_ReturnsNull(string version)
+    {
+        Assert.Null(VersionRules.For(version));
+    }
+
+    [Theory]
+    [InlineData("^2.1.304")]
+    [InlineData(">=2.1.304")]
+    [InlineData("<2.1.305 >=2.1.304")]
+    [InlineData(">=2.1.305 <2.1.304")]
+    public void Load_UnsupportedRange_Throws(string versions)
+    {
+        Assert.Throws<FormatException>(() => VersionRules.Load($"[{Entry(versions)}]"));
+    }
 }
