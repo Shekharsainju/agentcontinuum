@@ -51,7 +51,7 @@ public sealed class EventFilter
             var kept = new Dictionary<string, JsonScalar>(StringComparer.Ordinal);
             ReadObject(ref reader, "", kept);
 
-            if (!kept.TryGetValue(TypeField, out var type) || type.Kind != JsonTokenType.String)
+            if (reader.Read() || !kept.TryGetValue(TypeField, out var type) || type.Kind != JsonTokenType.String)
             {
                 return null;
             }
