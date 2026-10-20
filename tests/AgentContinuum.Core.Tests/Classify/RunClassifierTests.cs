@@ -118,4 +118,40 @@ public sealed class RunClassifierTests
 
         Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", null), result);
     }
+
+    private static readonly Classification Ambiguous = new(Outcome.Ambiguous, "Stopped, reason unverified", null);
+
+    [Fact]
+    public void LimitWithWrongSessionId_Ambiguous()
+    {
+        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Guid.NewGuid(), "rate_limit", 1_800_000_000)], 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
+
+    [Fact]
+    public void LimitWithNoRule_Ambiguous()
+    {
+        var result = RunClassifier.Classify(Rules, Session, [Init()], [Hook("StopFailure", Session, "rate_limit", 1_800_000_000)], 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
+
+    [Fact]
+    public void LimitWithOtherReason_Ambiguous()
+    {
+        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Session, "server_error")], 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
+
+    [Fact]
+    public void HookErrorOnly_Ambiguous()
+    {
+        var hookError = new HookEvent("hook_error", null, new Dictionary<string, string>());
+
+        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [hookError], 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
 }
