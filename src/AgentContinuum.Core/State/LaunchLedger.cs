@@ -62,6 +62,32 @@ public sealed class LaunchLedger
         return opId;
     });
 
+    public void MarkSpawned(string opId, int pid, long createdAtFileTime, Guid sessionId) =>
+        Transition(
+            opId,
+            [OpState.Intent],
+            OpState.Spawned,
+            "pid = $pid, proc_created_at = $created, session_id = $session",
+            ("$pid", pid),
+            ("$created", createdAtFileTime),
+            ("$session", sessionId.ToString("D")));
+
+    public void MarkExited(string opId, int exitCode) =>
+        Transition(opId, [OpState.Spawned], OpState.Exited, "exit_code = $exit_code", ("$exit_code", exitCode));
+
+    public void Classify(string opId, Outcome outcome, string reason) =>
+        Transition(
+            opId,
+            [OpState.Exited],
+            OpState.Classified,
+            "outcome = $outcome, reason = $reason",
+            ("$outcome", StateText.ToText(outcome)),
+            ("$reason", reason));
+
+    public void Abandon(string opId) => Transition(opId, [OpState.Intent], OpState.Abandoned, null);
+
+    public void Interrupt(string opId) => Transition(opId, [OpState.Intent, OpState.Spawned], OpState.Interrupted, null);
+
     public LaunchOp? Get(string opId)
     {
         using var cmd = _store.Connection.CreateCommand();
@@ -72,6 +98,24 @@ public sealed class LaunchLedger
     }
 
     public LaunchOp? Live(string taskId) => LiveOp(null, taskId);
+
+    // The guarded UPDATE makes check and write one statement, so a concurrent writer cannot slip between them.
+    private void Transition(string opId, OpState[] from, OpState to, string? assignments, params (string Name, object? Value)[] values)
+    {
+        var allowed = string.Join(",", from.Select(s => $"'{StateText.ToText(s)}'"));
+        var set = assignments is null ? "state = $to" : $"state = $to, {assignments}";
+        var changed = Execute(
+            null,
+            $"UPDATE launch_ops SET {set} WHERE op_id = $op_id AND state IN ({allowed})",
+            [("$op_id", opId), ("$to", StateText.ToText(to)), .. values]);
+        if (changed != 1)
+        {
+            var current = Get(opId)?.State;
+            throw new InvalidOperationException(current is null
+                ? $"No launch op {opId}."
+                : $"Launch op {opId} cannot move from {StateText.ToText(current.Value)} to {StateText.ToText(to)}.");
+        }
+    }
 
     private (long Used, long Max) Attempts(SqliteTransaction tx, string taskId)
     {
@@ -109,7 +153,6 @@ public sealed class LaunchLedger
         using var cmd = Command(tx, sql, values);
         return cmd.ExecuteNonQuery();
     }
-
 
     private static LaunchOp Read(SqliteDataReader r) => new(
         OpId: r.GetString(0),
