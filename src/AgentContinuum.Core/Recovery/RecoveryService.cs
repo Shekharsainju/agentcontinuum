@@ -8,6 +8,7 @@ namespace AgentContinuum.Core.Recovery;
 public sealed class RecoveryService
 {
     public const string InterruptedLaunchReason = "Interrupted launch";
+    public const string InterruptedRunReason = "Interrupted run";
 
     private readonly StateStore _store;
     private readonly LaunchLedger _ledger;
@@ -29,20 +30,26 @@ public sealed class RecoveryService
         IReadOnlyList<ProcessInfo>? processes = null;
         foreach (var op in _ledger.AllLive())
         {
-            if (op.State == OpState.Intent)
+            switch (op.State)
             {
-                var task = _tasks.Get(op.TaskId) ?? throw new InvalidOperationException($"No task {op.TaskId}.");
-                processes ??= _lister.ListOwnProcesses();
-                if (HasSessionProcess(processes, task.SessionId))
-                {
-                    _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedLaunchReason);
+                case OpState.Intent:
+                    var task = _tasks.Get(op.TaskId) ?? throw new InvalidOperationException($"No task {op.TaskId}.");
+                    processes ??= _lister.ListOwnProcesses();
+                    if (HasSessionProcess(processes, task.SessionId))
+                    {
+                        _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedLaunchReason);
+                        _ledger.Interrupt(op.OpId);
+                    }
+                    else
+                    {
+                        _tasks.SetState(op.TaskId, TaskState.WaitingForReset, null);
+                        _ledger.Abandon(op.OpId);
+                    }
+                    break;
+                case OpState.Spawned:
+                    _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedRunReason);
                     _ledger.Interrupt(op.OpId);
-                }
-                else
-                {
-                    _tasks.SetState(op.TaskId, TaskState.WaitingForReset, null);
-                    _ledger.Abandon(op.OpId);
-                }
+                    break;
             }
         }
     }
