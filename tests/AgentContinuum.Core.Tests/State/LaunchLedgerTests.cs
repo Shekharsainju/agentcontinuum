@@ -71,4 +71,16 @@ public sealed class LaunchLedgerTests : IDisposable
 
         Assert.Equal(1, _tasks.Get("t1")!.AttemptsUsed);
     }
+
+    [Fact]
+    public void BeginIntent_AttemptsExhaustedThrows()
+    {
+        _tasks.Add(TestTasks.Sample("t2", maxAttempts: 2) with { AttemptsUsed = 2 });
+        var ledger = new LaunchLedger(_store);
+
+        Assert.Throws<InvalidOperationException>(() => ledger.BeginIntent("t2"));
+
+        Assert.Equal(2, _tasks.Get("t2")!.AttemptsUsed);
+        Assert.Null(ledger.Live("t2"));
+    }
 }
