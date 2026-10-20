@@ -55,3 +55,30 @@ Describe 'Hide-E1Email' {
   It 'replaces email addresses' { Hide-E1Email 'Claude Code me@example.com' | Should Be 'Claude Code <email>' }
   It 'leaves other text alone' { Hide-E1Email 'Claude Code-credentials' | Should Be 'Claude Code-credentials' }
 }
+
+Describe 'Invoke-E1Command' {
+  It 'captures stdout and the exit code' {
+    $r = Invoke-E1Command -Exe 'cmd.exe' -Arguments '/c echo hi& exit 3' -TimeoutSeconds 10
+    $r.stdout.Trim() | Should Be 'hi'
+    $r.exit_code | Should Be 3
+    $r.timed_out | Should Be $false
+  }
+  It 'kills a command that runs past the timeout' {
+    $r = Invoke-E1Command -Exe 'powershell.exe' -Arguments '-NoProfile -Command Start-Sleep 20' -TimeoutSeconds 1
+    $r.timed_out | Should Be $true
+    $r.seconds -lt 10 | Should Be $true
+  }
+  It 'applies environment overrides' {
+    (Invoke-E1Command -Exe 'cmd.exe' -Arguments '/c echo %E1_PROBE_VAR%' -TimeoutSeconds 10 -EnvOverrides @{ E1_PROBE_VAR = 'set1' }).stdout.Trim() | Should Be 'set1'
+  }
+  It 'removes named variables' {
+    $env:E1_PROBE_GONE = 'present'
+    try { (Invoke-E1Command -Exe 'cmd.exe' -Arguments '/c echo [%E1_PROBE_GONE%]' -TimeoutSeconds 10 -RemoveEnv @('E1_PROBE_GONE')).stdout.Trim() | Should Be '[%E1_PROBE_GONE%]' }
+    finally { Remove-Item Env:\E1_PROBE_GONE }
+  }
+  It 'closes stdin so a reader sees end of input' {
+    $r = Invoke-E1Command -Exe 'powershell.exe' -Arguments '-NoProfile -Command "[Console]::In.ReadToEnd().Length"' -TimeoutSeconds 10
+    $r.timed_out | Should Be $false
+    $r.stdout.Trim() | Should Be '0'
+  }
+}
