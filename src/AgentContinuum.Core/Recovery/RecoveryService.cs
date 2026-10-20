@@ -11,6 +11,7 @@ public sealed class RecoveryService
 {
     public const string InterruptedLaunchReason = "Interrupted launch";
     public const string InterruptedRunReason = "Interrupted run";
+    public const string ProcessCheckFailedReason = "Process check failed";
 
     private readonly StateStore _store;
     private readonly LaunchLedger _ledger;
@@ -40,13 +41,30 @@ public sealed class RecoveryService
     public void Reconcile()
     {
         IReadOnlyList<ProcessInfo>? processes = null;
+        var listFailed = false;
         foreach (var op in _ledger.AllLive())
         {
             var task = _tasks.Get(op.TaskId) ?? throw new InvalidOperationException($"No task {op.TaskId}.");
             switch (op.State)
             {
                 case OpState.Intent:
-                    processes ??= _lister.ListOwnProcesses();
+                    if (processes is null && !listFailed)
+                    {
+                        try
+                        {
+                            processes = _lister.ListOwnProcesses();
+                        }
+                        catch (ProcessListException)
+                        {
+                            listFailed = true;
+                        }
+                    }
+                    if (processes is null)
+                    {
+                        // The op stays INTENT: without a process list it is unknown whether work happened.
+                        _tasks.SetState(op.TaskId, TaskState.NeedsAttention, ProcessCheckFailedReason);
+                        break;
+                    }
                     RecoverIntent(op, task, processes);
                     break;
                 case OpState.Spawned:
