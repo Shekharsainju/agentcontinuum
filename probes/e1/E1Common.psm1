@@ -62,4 +62,12 @@ function Get-E1TextShape {
   [ordered]@{ length = $Text.Length; lines = $lines; categories = $found.ToArray() }
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape
+function Get-E1KeyPaths {
+  <# Lists the key paths of a JSON file. Values are never returned. #>
+  param([Parameter(Mandatory)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path)) { return @() }
+  $shape = ConvertTo-E1Shape -Json (Get-Content -LiteralPath $Path -Raw)
+  @($shape.Keys)
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths
