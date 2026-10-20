@@ -9,6 +9,19 @@ Describe 'Get-ProbeAccountRight' {
   }
 }
 
+Describe 'Remove-ProbeProfileInstance' {
+  It 'deletes the profile instance with Remove-CimInstance, not a Delete method call' {
+    InModuleScope ProbeTeardown {
+      Mock Remove-CimInstance { }
+      Mock Invoke-CimMethod { throw 'Method "Delete" not found' }
+      $profile = New-CimInstance -ClassName Win32_UserProfile -ClientOnly -Property @{ SID = 'S-1-5-21-x' }
+      Remove-ProbeProfileInstance -Profile $profile
+      Assert-MockCalled Remove-CimInstance -Times 1 -Scope It
+      Assert-MockCalled Invoke-CimMethod -Times 0 -Scope It
+    }
+  }
+}
+
 Describe 'Invoke-ProbeTeardown' {
   BeforeEach {
     Mock -ModuleName ProbeTeardown Get-LocalUser { }
