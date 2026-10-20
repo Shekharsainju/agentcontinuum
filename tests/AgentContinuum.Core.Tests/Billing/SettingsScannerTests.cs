@@ -76,6 +76,39 @@ public sealed class SettingsScannerTests : IDisposable
     }
 
     [Theory]
+    [InlineData("{\"apiKeyHelper\": ")]
+    [InlineData("[\"apiKeyHelper\"]")]
+    [InlineData("")]
+    [InlineData("{\"env\":{}} trailing")]
+    public void Scan_UnparseableFile_Fails(string content)
+    {
+        Write("user", content);
+
+        var result = Scan();
+
+        Assert.False(result.Pass);
+        Assert.Equal(["user: unreadable"], result.Problems);
+    }
+
+    [Fact]
+    public void Scan_LockedFile_Fails()
+    {
+        Write("project-local", "{}");
+        var path = Path.Combine(_worktree, ".claude", "settings.local.json");
+        using var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Equal(["project-local: unreadable"], Scan().Problems);
+    }
+
+    [Fact]
+    public void Scan_DirectoryInPlaceOfFile_Fails()
+    {
+        Directory.CreateDirectory(Path.Combine(_userProfile, ".claude", "settings.json"));
+
+        Assert.Equal(["user: unreadable"], Scan().Problems);
+    }
+
+    [Theory]
     [InlineData("ANTHROPIC_BASE_URL")]
     [InlineData("ANTHROPIC_API_KEY")]
     [InlineData("ANTHROPIC_AUTH_TOKEN")]
