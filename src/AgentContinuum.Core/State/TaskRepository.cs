@@ -80,6 +80,9 @@ public sealed class TaskRepository
     public void SetBaseline(string taskId, string fingerprint) =>
         Update(taskId, "baseline_fingerprint = $fingerprint", ("$fingerprint", fingerprint));
 
+    public void SetCliPin(string taskId, string path, string sha256, string version) =>
+        Update(taskId, "cli_path = $path, cli_sha256 = $sha256, cli_version = $version", ("$path", path), ("$sha256", sha256), ("$version", version));
+
     private void Update(string taskId, string assignments, params (string Name, object? Value)[] values)
     {
         using var cmd = _store.Connection.CreateCommand();
