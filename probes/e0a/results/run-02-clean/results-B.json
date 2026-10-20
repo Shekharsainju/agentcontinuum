@@ -1,0 +1,137 @@
+{
+    "checks":  [
+                   {
+                       "id":  "C2",
+                       "name":  "launch_and_assign",
+                       "result":  "pass",
+                       "details":  {
+                                       "child_in_job_before":  true,
+                                       "assign_win32_error":  0,
+                                       "child_pid":  29920,
+                                       "job_has_pid":  true
+                                   }
+                   },
+                   {
+                       "id":  "C3",
+                       "name":  "freeze_and_thaw",
+                       "result":  "pass",
+                       "details":  {
+                                       "beats_during_freeze":  0,
+                                       "resume_seconds":  0.2,
+                                       "freeze_ntstatus":  0,
+                                       "gap_seconds":  6.3,
+                                       "child_pid":  26460,
+                                       "thaw_ntstatus":  0
+                                   }
+                   },
+                   {
+                       "id":  "C3b",
+                       "name":  "suspend_resume",
+                       "result":  "pass",
+                       "details":  {
+                                       "beats_during_freeze":  0,
+                                       "resume_seconds":  0.2,
+                                       "resume_ntstatus":  0,
+                                       "gap_seconds":  6.3,
+                                       "child_pid":  26460,
+                                       "suspend_ntstatus":  0
+                                   }
+                   },
+                   {
+                       "id":  "C4",
+                       "name":  "terminate",
+                       "result":  "pass",
+                       "details":  {
+                                       "active_processes":  0,
+                                       "terminate_win32_error":  0,
+                                       "heartbeat_stopped":  true,
+                                       "terminate_ok":  true,
+                                       "child_pid":  6540
+                                   }
+                   },
+                   {
+                       "id":  "C5",
+                       "name":  "kill_on_job_close",
+                       "result":  "pass",
+                       "details":  {
+                                       "sub_pid":  5184,
+                                       "grandchild_gone":  true,
+                                       "grandchild_creation":  134369320127449483,
+                                       "grandchild_pid":  20148
+                                   }
+                   },
+                   {
+                       "id":  "C6",
+                       "name":  "breakaway",
+                       "result":  "pass",
+                       "details":  {
+                                       "child_win32_error":  5,
+                                       "grandchild_creation":  -1,
+                                       "grandchild_pid":  0,
+                                       "child_pid":  24160,
+                                       "child_reported_ok":  false
+                                   }
+                   },
+                   {
+                       "id":  "C7",
+                       "name":  "escape_finding",
+                       "result":  "finding",
+                       "details":  {
+                                       "register_error":  "Access is denied.\r\n",
+                                       "registered":  false,
+                                       "child_pid":  19764,
+                                       "start_error":  "",
+                                       "started":  false
+                                   }
+                   },
+                   {
+                       "id":  "C8",
+                       "name":  "isolation",
+                       "result":  "fail",
+                       "details":  {
+                                       "entries":  [
+                                                       {
+                                                           "name":  "ctl_read",
+                                                           "ok":  false,
+                                                           "error":  "Access to the path \u0027C:\\ProgramData\\ac-probe\\ctl\u0027 is denied."
+                                                       },
+                                                       {
+                                                           "name":  "ctl_write",
+                                                           "ok":  false,
+                                                           "error":  "Exception calling \"WriteAllText\" with \"2\" argument(s): \"Access to the path \u0027C:\\ProgramData\\ac-probe\\ctl\\probe-isolation-3fdb3d7c7a954e3aa2704a4e65c4c209.tmp\u0027 is denied.\""
+                                                       },
+                                                       {
+                                                           "name":  "results_read",
+                                                           "ok":  false,
+                                                           "error":  "Access to the path \u0027C:\\ProgramData\\ac-probe-results\u0027 is denied."
+                                                       },
+                                                       {
+                                                           "name":  "results_write",
+                                                           "ok":  false,
+                                                           "error":  "Exception calling \"WriteAllText\" with \"2\" argument(s): \"Access to the path \u0027C:\\ProgramData\\ac-probe-results\\probe-isolation-fc74edd255914e77870d9f382885347a.tmp\u0027 is denied.\""
+                                                       },
+                                                       {
+                                                           "name":  "open_harness_terminate",
+                                                           "ok":  true,
+                                                           "error":  ""
+                                                       },
+                                                       {
+                                                           "name":  "open_harness_vmwrite",
+                                                           "ok":  false,
+                                                           "error":  "5"
+                                                       }
+                                                   ],
+                                       "child_pid":  19832
+                                   }
+                   }
+               ],
+    "started_utc":  "2026-10-20T01:06:31.0206462Z",
+    "build":  "26300.9711",
+    "display_version":  "26H2",
+    "os_caption":  "Microsoft Windows 11 Home",
+    "run":  "B",
+    "harness_in_job_before":  true,
+    "edition":  "Windows 11 Home",
+    "schema":  "ac-probe-e0a/1",
+    "edition_warning":  null
+}

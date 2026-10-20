@@ -1,0 +1,64 @@
+{
+    "checks":  [
+                   {
+                       "id":  "C1",
+                       "name":  "precheck",
+                       "result":  "pass",
+                       "details":  {
+                                       "elevated":  true,
+                                       "seclogon":  "Running"
+                                   }
+                   },
+                   {
+                       "id":  "S0",
+                       "name":  "ctl_batch_logon_right",
+                       "result":  "finding",
+                       "details":  {
+                                       "needed_grant":  false,
+                                       "agent_batch_right":  false,
+                                       "run_a_outcome":  "timeout",
+                                       "ctl_batch_after_register":  false,
+                                       "ctl_batch_before":  false,
+                                       "run_b_stray_pids":  [
+                                                                19764,
+                                                                18048,
+                                                                19832,
+                                                                7120
+                                                            ],
+                                       "run_a_stray_pids":  [
+
+                                                            ],
+                                       "run_b_outcome":  "done"
+                                   }
+                   },
+                   {
+                       "id":  "S1",
+                       "name":  "secret_absent_on_disk",
+                       "result":  "pass",
+                       "details":  {
+                                       "hits":  [
+
+                                                ],
+                                       "unscanned":  [
+
+                                                     ]
+                                   }
+                   },
+                   {
+                       "id":  "T0",
+                       "name":  "teardown_verify",
+                       "result":  "pass",
+                       "details":  {
+                                       "error":  ""
+                                   }
+                   }
+               ],
+    "started_utc":  "2026-10-20T00:59:10.7848769Z",
+    "build":  "26300.9711",
+    "display_version":  "26H2",
+    "os_caption":  "Microsoft Windows 11 Home",
+    "run":  "setup",
+    "edition":  "Windows 11 Home",
+    "schema":  "ac-probe-e0a/1",
+    "edition_warning":  null
+}
