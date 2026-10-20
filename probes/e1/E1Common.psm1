@@ -43,4 +43,23 @@ function ConvertTo-E1Shape {
   $shape
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape
+# Longer phrases first, so "not logged in" is not also counted as "logged in".
+$script:TextCategories = @(
+  'not logged in', 'logged in', 'claude max', 'claude pro', 'claude team', 'claude enterprise', 'claude.ai',
+  'subscription', 'api key', 'apikey', 'api_key', 'oauth', 'anthropic console', 'console',
+  'bedrock', 'vertex', 'organization', 'token', 'expired', 'login'
+)
+
+function Get-E1TextShape {
+  <# Describes text output by length, line count and which fixed category words appear, never by its content. #>
+  param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+  $rest = $Text.ToLowerInvariant()
+  $found = New-Object System.Collections.Generic.List[string]
+  foreach ($c in $script:TextCategories) {
+    if ($rest.Contains($c)) { $found.Add($c); $rest = $rest.Replace($c, ' ') }
+  }
+  $lines = @($Text -split "`r?`n" | Where-Object { $_ -ne '' }).Count
+  [ordered]@{ length = $Text.Length; lines = $lines; categories = $found.ToArray() }
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape
