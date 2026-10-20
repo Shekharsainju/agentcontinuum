@@ -74,7 +74,9 @@ function Revoke-ProbeRight {
 
 function Remove-ProbeProfileInstance {
   param([Parameter(Mandatory)]$Profile)
-  [void](Invoke-CimMethod -InputObject $Profile -MethodName Delete -ErrorAction Stop)
+  # Win32_UserProfile has no Delete method; the WMI .Delete() is the intrinsic DeleteInstance,
+  # which the CIM cmdlets expose only as Remove-CimInstance.
+  Remove-CimInstance -InputObject $Profile -ErrorAction Stop
 }
 
 function Dismount-ProbeProfileHive {
