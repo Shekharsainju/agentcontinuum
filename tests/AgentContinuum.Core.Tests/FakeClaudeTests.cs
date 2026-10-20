@@ -83,6 +83,61 @@ public sealed class FakeClaudeTests : IDisposable
         Assert.DoesNotContain("SENTINEL-stdin", recorded);
     }
 
+    private string HookSettings(string hookName, string sinkPath)
+    {
+        var command = $"\"{FakeClaudeProcess.ExePath}\" --fake-hook-sink \"{sinkPath}\"";
+        var settings = new System.Text.Json.Nodes.JsonObject
+        {
+            ["hooks"] = new System.Text.Json.Nodes.JsonObject
+            {
+                [hookName] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
+                {
+                    ["hooks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["type"] = "command",
+                        ["command"] = command,
+                    }),
+                }),
+            },
+        };
+        var path = _dir.File("launch settings.json");
+        File.WriteAllText(path, settings.ToJsonString());
+        return path;
+    }
+
+    [Fact]
+    public void RunsHookFromSettings()
+    {
+        Scenario("""
+            {
+              "events": [ { "type": "result", "subtype": "success", "is_error": true } ],
+              "hook": { "name": "StopFailure", "payload": { "error": "rate_limit", "resets_at": 1800000000 } },
+              "exitCode": 1
+            }
+            """);
+        var sink = _dir.File("hook input.json");
+
+        FakeClaudeProcess.Run(_dir.Path, [.. HeadlessArgs(), "--settings", HookSettings("StopFailure", sink)]);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(sink));
+        var payload = doc.RootElement;
+        Assert.Equal("StopFailure", payload.GetProperty("hook_event_name").GetString());
+        Assert.Equal(Session, payload.GetProperty("session_id").GetString());
+        Assert.Equal("rate_limit", payload.GetProperty("error").GetString());
+        Assert.Equal(1800000000, payload.GetProperty("resets_at").GetInt64());
+    }
+
+    [Fact]
+    public void HookNotInSettings_NotRun()
+    {
+        Scenario("""{ "events": [], "hook": { "name": "StopFailure", "payload": {} }, "exitCode": 1 }""");
+        var sink = _dir.File("hook input.json");
+
+        FakeClaudeProcess.Run(_dir.Path, [.. HeadlessArgs(), "--settings", HookSettings("Stop", sink)]);
+
+        Assert.False(File.Exists(sink));
+    }
+
     [Theory]
     [InlineData("--dangerously-skip-permissions")]
     [InlineData("--continue")]
