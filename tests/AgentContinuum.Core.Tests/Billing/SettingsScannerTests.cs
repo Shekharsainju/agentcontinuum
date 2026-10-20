@@ -57,4 +57,21 @@ public sealed class SettingsScannerTests : IDisposable
 
         Assert.True(Scan().Pass);
     }
+
+    [Theory]
+    [InlineData("managed")]
+    [InlineData("user")]
+    [InlineData("user-local")]
+    [InlineData("project")]
+    [InlineData("project-local")]
+    public void Scan_ApiKeyHelperInUserSettings_Fails(string scope)
+    {
+        Write(scope, """{"apiKeyHelper":"C:/tools/SENTINEL-p2.cmd"}""");
+
+        var result = Scan();
+
+        Assert.False(result.Pass);
+        Assert.Equal([$"{scope}: apiKeyHelper"], result.Problems);
+        Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
+    }
 }
