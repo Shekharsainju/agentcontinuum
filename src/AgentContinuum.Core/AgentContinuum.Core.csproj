@@ -11,4 +11,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Rules\claude-code.json" LogicalName="AgentContinuum.Core.Rules.claude-code.json" />
+  </ItemGroup>
+
 </Project>
