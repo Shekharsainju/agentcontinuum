@@ -22,6 +22,7 @@ public sealed class PreflightRunner
         [
             new AdmissionCheck(new LaunchLedger(store)),
             new EligibilityCheck(),
+            new ProcessCheck(lister),
         ];
     }
 
