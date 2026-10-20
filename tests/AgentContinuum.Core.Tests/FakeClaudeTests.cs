@@ -138,6 +138,23 @@ public sealed class FakeClaudeTests : IDisposable
         Assert.False(File.Exists(sink));
     }
 
+    [Fact]
+    public void LingerSeconds_StaysRunningAfterEvents()
+    {
+        Scenario("""{ "events": [ { "type": "assistant" } ], "exitCode": 0, "lingerSeconds": 10 }""");
+
+        using var process = FakeClaudeProcess.Start(_dir.Path, HeadlessArgs());
+        try
+        {
+            Assert.NotNull(process.StandardOutput.ReadLine());
+            Assert.False(process.WaitForExit(TimeSpan.FromSeconds(1)));
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+        }
+    }
+
     [Theory]
     [InlineData("--dangerously-skip-permissions")]
     [InlineData("--continue")]
