@@ -128,4 +128,60 @@ function Invoke-E1Command {
   }
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command
+function Invoke-E1StreamRun {
+  <# Runs a stream-json command, shaping each stdout line as it arrives, and records whether the process exits on its own after the final event. #>
+  param(
+    [Parameter(Mandatory)][string]$Exe,
+    [string]$Arguments = '',
+    [string]$WorkingDirectory,
+    [hashtable]$EnvOverrides,
+    [string[]]$RemoveEnv,
+    [string]$FinalType = 'result',
+    [int]$ExitGraceSeconds = 120,
+    [int]$IdleSeconds = 900,
+    [int]$MaxSeconds = 1800
+  )
+  $psi = New-E1StartInfo -Exe $Exe -Arguments $Arguments -WorkingDirectory $WorkingDirectory -EnvOverrides $EnvOverrides -RemoveEnv $RemoveEnv
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $p = [Diagnostics.Process]::Start($psi)
+  $p.StandardInput.Close()
+  $err = $p.StandardError.ReadToEndAsync()
+  $events = New-Object System.Collections.Generic.List[object]
+  $finalAt = $null; $lastLineAt = 0.0; $killedReason = $null
+  $pending = $p.StandardOutput.ReadLineAsync()
+  while ($true) {
+    if ($pending.Wait(500)) {
+      $line = $pending.Result
+      if ($null -eq $line) { break }
+      $now = $sw.Elapsed.TotalSeconds; $lastLineAt = $now
+      $shape = ConvertTo-E1Shape -Json $line
+      $events.Add([ordered]@{ seconds = [math]::Round($now, 1); shape = $shape })
+      if ($shape.Contains('type') -and $shape['type'] -eq $FinalType -and $null -eq $finalAt) { $finalAt = $now }
+      $pending = $p.StandardOutput.ReadLineAsync()
+      continue
+    }
+    $now = $sw.Elapsed.TotalSeconds
+    if ($null -ne $finalAt -and ($now - $finalAt) -gt $ExitGraceSeconds) { $killedReason = 'after_final'; break }
+    if (($now - $lastLineAt) -gt $IdleSeconds) { $killedReason = 'idle'; break }
+    if ($now -gt $MaxSeconds) { $killedReason = 'max'; break }
+  }
+  if (-not $killedReason) {
+    $graceLeft = if ($null -ne $finalAt) { [math]::Max(1, $ExitGraceSeconds - ($sw.Elapsed.TotalSeconds - $finalAt)) } else { 60 }
+    if (-not $p.WaitForExit([int]($graceLeft * 1000))) { $killedReason = 'after_stdout_closed' }
+  }
+  if ($killedReason) { Stop-E1ProcessTree -ProcessId $p.Id; [void]$p.WaitForExit(5000) }
+  $exitAt = $sw.Elapsed.TotalSeconds
+  [void]$err.Wait(5000)
+  [ordered]@{
+    events                = $events.ToArray()
+    final_seen            = ($null -ne $finalAt)
+    exit_code             = if ($killedReason) { $null } else { $p.ExitCode }
+    exited_by_itself      = (-not $killedReason)
+    killed_reason         = $killedReason
+    seconds_final_to_exit = if ($null -ne $finalAt) { [math]::Round($exitAt - $finalAt, 1) } else { $null }
+    timed_out             = ($killedReason -eq 'idle' -or $killedReason -eq 'max')
+    stderr                = Get-E1TextShape -Text $(if ($err.IsCompleted) { $err.Result } else { '' })
+  }
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command, Invoke-E1StreamRun
