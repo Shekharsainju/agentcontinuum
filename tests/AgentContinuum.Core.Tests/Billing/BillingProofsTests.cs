@@ -251,6 +251,34 @@ public sealed class BillingProofsTests : IDisposable
         Assert.Equal([failed], verdict.FailedProofs);
     }
 
+    [Theory]
+    [InlineData(@"\other profile")]
+    [InlineData(null)]
+    public void P1_ChildProfileNotTheScannedProfile_Fails(string? childProfileSuffix)
+    {
+        if (childProfileSuffix is null)
+        {
+            _childEnv.Remove("USERPROFILE");
+        }
+        else
+        {
+            var other = Directory.CreateDirectory(_dir.Path + childProfileSuffix).FullName;
+            Directory.CreateDirectory(Path.Combine(other, ".claude"));
+            File.WriteAllText(Path.Combine(other, ".claude", "settings.json"), """{"apiKeyHelper":"x"}""");
+            _childEnv["USERPROFILE"] = other;
+        }
+
+        Assert.Equal(["P1"], Evaluate().FailedProofs);
+    }
+
+    [Fact]
+    public void P1_ChildProfileDiffersOnlyInCaseOrTrailingSlash_Passes()
+    {
+        _childEnv["USERPROFILE"] = _userProfile.ToUpperInvariant() + @"\";
+
+        Assert.True(Evaluate().Verified);
+    }
+
     private sealed class FakeRunner : ICommandRunner
     {
         public CommandResult Result { get; set; } = new(1, "", false);
