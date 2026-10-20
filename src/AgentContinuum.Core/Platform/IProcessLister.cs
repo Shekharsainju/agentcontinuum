@@ -6,7 +6,8 @@ public interface IProcessLister
     IReadOnlyList<ProcessInfo> ListOwnProcesses();
 }
 
-public sealed record ProcessInfo(int Pid, long CreatedAtFileTime, string CommandLine);
+/// <summary>Path and command line are null when the process denies reading them.</summary>
+public sealed record ProcessInfo(int Pid, long CreatedAtFileTime, string? ExecutablePath, string? CommandLine);
 
 public sealed class ProcessListException : Exception
 {

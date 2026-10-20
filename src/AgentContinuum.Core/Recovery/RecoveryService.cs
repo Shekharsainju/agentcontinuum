@@ -67,13 +67,13 @@ public sealed class RecoveryService
         switch (op.State)
         {
             case OpState.Intent:
-                if (processes.Value is not { } list)
+                if ((processes.Value is { } list ? SessionHasProcess(list, task) : null) is not { } hasProcess)
                 {
-                    // The op stays INTENT: without a process list it is unknown whether work happened.
+                    // The op stays INTENT: without a reliable process list it is unknown whether work happened.
                     _tasks.SetState(op.TaskId, TaskState.NeedsAttention, ProcessCheckFailedReason);
                     return;
                 }
-                RecoverIntent(op, task, list);
+                RecoverIntent(op, hasProcess);
                 break;
             case OpState.Spawned:
                 _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedRunReason);
@@ -85,9 +85,9 @@ public sealed class RecoveryService
         }
     }
 
-    private void RecoverIntent(LaunchOp op, TaskRecord task, IReadOnlyList<ProcessInfo> processes)
+    private void RecoverIntent(LaunchOp op, bool sessionHasProcess)
     {
-        if (HasSessionProcess(processes, task.SessionId))
+        if (sessionHasProcess)
         {
             _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedLaunchReason);
             _ledger.Interrupt(op.OpId);
@@ -143,9 +143,27 @@ public sealed class RecoveryService
         }
     }
 
-    private static bool HasSessionProcess(IReadOnlyList<ProcessInfo> processes, Guid sessionId)
+    // Null means unknown. The list always holds the controller itself, so an empty one is a failed listing,
+    // and a CLI process whose command line cannot be read may belong to this session.
+    private static bool? SessionHasProcess(IReadOnlyList<ProcessInfo> processes, TaskRecord task)
     {
-        var session = sessionId.ToString("D");
-        return processes.Any(p => p.CommandLine.Contains(session, StringComparison.OrdinalIgnoreCase));
+        if (processes.Count == 0)
+        {
+            return null;
+        }
+
+        var session = task.SessionId.ToString("D");
+        if (processes.Any(p => p.CommandLine?.Contains(session, StringComparison.OrdinalIgnoreCase) == true))
+        {
+            return true;
+        }
+
+        if (processes.Any(p => string.IsNullOrEmpty(p.CommandLine)
+            && (p.ExecutablePath is null || string.Equals(p.ExecutablePath, task.CliPath, StringComparison.OrdinalIgnoreCase))))
+        {
+            return null;
+        }
+
+        return false;
     }
 }
