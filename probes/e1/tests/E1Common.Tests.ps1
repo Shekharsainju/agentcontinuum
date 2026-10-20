@@ -13,3 +13,19 @@ Describe 'Protect-E1Value' {
   It 'redacts free text with spaces' { (Protect-E1Value 'Reply with OK').redacted | Should Be $true }
   It 'redacts paths' { (Protect-E1Value 'C:\Users\me\.claude\x.jsonl').redacted | Should Be $true }
 }
+
+Describe 'ConvertTo-E1Shape' {
+  It 'never emits a sentinel from message content' {
+    $j = '{"type":"assistant","message":{"content":[{"text":"SENTINEL-7f3a in a sentence"}]}}'
+    (ConvertTo-E1Shape $j | ConvertTo-Json -Depth 8) | Should Not Match 'SENTINEL-7f3a'
+  }
+  It 'keeps key paths' { (ConvertTo-E1Shape '{"a":{"b":1}}').Keys -contains 'a.b' | Should Be $true }
+  It 'keeps enumerated leaf values' { (ConvertTo-E1Shape '{"apiKeySource":"none"}')['apiKeySource'] | Should Be 'none' }
+  It 'records array count and first element shape' {
+    $s = ConvertTo-E1Shape '{"xs":[{"k":1},{"k":2},{"k":3}]}'
+    $s['xs[#]'] | Should Be 3
+    $s['xs[0].k'] | Should Be 1
+    $s.Keys -contains 'xs[1].k' | Should Be $false
+  }
+  It 'returns a parse marker for invalid JSON' { (ConvertTo-E1Shape '{"a":')['_parse_error'] | Should Be $true }
+}
