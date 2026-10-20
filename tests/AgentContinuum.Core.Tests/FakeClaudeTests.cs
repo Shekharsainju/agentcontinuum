@@ -155,6 +155,42 @@ public sealed class FakeClaudeTests : IDisposable
         }
     }
 
+    [Fact]
+    public void SpawnChildren_StartsLiveClaudeChildren()
+    {
+        Scenario("""{ "events": [ { "type": "assistant" } ], "exitCode": 0, "lingerSeconds": 10, "spawnChildren": 2 }""");
+
+        using var process = FakeClaudeProcess.Start(_dir.Path, HeadlessArgs());
+        var childPids = Array.Empty<int>();
+        try
+        {
+            Assert.NotNull(process.StandardOutput.ReadLine());
+            childPids = System.Text.Json.JsonSerializer.Deserialize<int[]>(File.ReadAllText(_dir.File("fake-claude-children.json")))!;
+
+            Assert.Equal(2, childPids.Length);
+            foreach (var pid in childPids)
+            {
+                using var child = System.Diagnostics.Process.GetProcessById(pid);
+                Assert.False(child.HasExited);
+                Assert.Equal("claude", child.ProcessName);
+            }
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+            foreach (var pid in childPids)
+            {
+                try
+                {
+                    System.Diagnostics.Process.GetProcessById(pid).Kill();
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+        }
+    }
+
     [Theory]
     [InlineData("--dangerously-skip-permissions")]
     [InlineData("--continue")]
