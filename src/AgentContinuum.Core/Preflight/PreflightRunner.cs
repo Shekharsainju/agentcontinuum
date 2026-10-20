@@ -21,6 +21,7 @@ public sealed class PreflightRunner
         _checks =
         [
             new AdmissionCheck(new LaunchLedger(store)),
+            new EligibilityCheck(),
         ];
     }
 
