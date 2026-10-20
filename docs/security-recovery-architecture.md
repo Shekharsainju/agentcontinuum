@@ -238,3 +238,19 @@ Nine facts must be confirmed on your machine before this spec is build-ready. Th
 - [ ] An auth status command per CLI version (R15 P4)
 - [ ] A first-event field reporting the auth source in headless mode (R15 P5)
 - [ ] A usage-percentage source with no tool content; without one, the pre-limit checkpoint is dropped (R5)
+
+## E0b gates
+
+E0a confirmed the first two items above for an interactive controller only (`docs/e0a-findings.md`). Two hard gates follow from it. Until E0b passes:
+
+- No unattended controller. The controller must not run as a scheduled task, a service or anything else in Session 0. E0a Run A, the same harness started from a scheduled task, timed out.
+- No I4 claim. No release may state or rely on I4. In E0a C8, the agent account opened the controller's process with `PROCESS_TERMINATE`.
+
+E0b passes when, on this machine:
+
+1. The harness runs to completion from a scheduled task in Session 0, and every check it ran interactively passes there too. Each check records its progress as it finishes, so a timeout shows where the run stopped.
+2. The controller sets a deny ACE for the agent SID on its own process at startup, covering `PROCESS_TERMINATE`, `PROCESS_VM_WRITE` and `PROCESS_VM_OPERATION`. The C8 process-open attempts are then denied in both start modes.
+3. The C7 question is answered: whether `ac-controller` can enumerate an `ac-agent` process it did not create, read its creation time, and terminate it.
+4. Every agent process the harness starts is assigned to its job before it runs, and every kill goes through the job or a retained handle and records its result (the E0a containment caveat).
+
+Release 1 is not blocked by E0b, because it runs the agent under your own account and makes no I4 claim. Releases 2 and 3 are.
