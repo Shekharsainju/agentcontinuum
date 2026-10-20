@@ -34,11 +34,11 @@ public sealed class ResetScheduler : IUsageLimitHandler
         foreach (var task in _tasks.List())
         {
             if (task.State == TaskState.WaitingForReset
-                && task.AttemptPermittedAtEpoch is { } permitted
-                && now >= permitted
+                && (task.AttemptPermittedAtEpoch is not { } permitted || now >= permitted)
                 && _tasks.TryMoveState(task.TaskId, TaskState.WaitingForReset, TaskState.ResumeOffered))
             {
-                offers.Add(new Offer(task.TaskId, task.Label, task.ResetExpectedAtEpoch is null));
+                var notStarted = task.AttemptPermittedAtEpoch is null;
+                offers.Add(new Offer(task.TaskId, task.Label, !notStarted && task.ResetExpectedAtEpoch is null, notStarted));
             }
         }
         return offers;
