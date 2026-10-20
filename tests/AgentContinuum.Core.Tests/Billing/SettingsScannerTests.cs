@@ -9,14 +9,14 @@ public sealed class SettingsScannerTests : IDisposable
     private readonly TempDirectory _dir = new();
     private readonly string _userProfile;
     private readonly string _worktree;
-    private readonly string _managed;
+    private readonly string[] _managed;
     private readonly ClaudeRules _rules = VersionRules.LoadEmbedded().Entries[0];
 
     public SettingsScannerTests()
     {
         _userProfile = Directory.CreateDirectory(_dir.File("profile")).FullName;
         _worktree = Directory.CreateDirectory(_dir.File("work tree")).FullName;
-        _managed = _dir.File("managed-settings.json");
+        _managed = [_dir.File("ProgramData managed-settings.json"), _dir.File("Program Files managed-settings.json")];
     }
 
     public void Dispose() => _dir.Dispose();
@@ -25,7 +25,8 @@ public sealed class SettingsScannerTests : IDisposable
     {
         var path = scope switch
         {
-            "managed" => _managed,
+            "managed" => _managed[0],
+            "managed-program-files" => _managed[1],
             "user" => Path.Combine(_userProfile, ".claude", "settings.json"),
             "user-local" => Path.Combine(_userProfile, ".claude", "settings.local.json"),
             "project" => Path.Combine(_worktree, ".claude", "settings.json"),
@@ -73,6 +74,31 @@ public sealed class SettingsScannerTests : IDisposable
         Assert.False(result.Pass);
         Assert.Equal([$"{scope}: apiKeyHelper"], result.Problems);
         Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void Scan_ProgramFilesManagedSettings_Scanned()
+    {
+        Write("managed-program-files", """{"apiKeyHelper":"x"}""");
+
+        Assert.Equal(["managed: apiKeyHelper"], Scan().Problems);
+    }
+
+    [Fact]
+    public void Scan_NoManagedPaths_Fails()
+    {
+        Assert.Equal(["managed: no path"], SettingsScanner.Scan(_userProfile, _worktree, [], _rules).Problems);
+    }
+
+    [Fact]
+    public void DefaultManagedPaths_ProgramDataAndProgramFiles()
+    {
+        Assert.Equal(
+            [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ClaudeCode", "managed-settings.json"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ClaudeCode", "managed-settings.json"),
+            ],
+            SettingsScanner.DefaultManagedPaths());
     }
 
     [Theory]

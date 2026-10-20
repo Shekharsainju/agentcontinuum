@@ -51,7 +51,7 @@ public sealed class BillingProofsTests : IDisposable
     }
 
     private BillingVerdict Evaluate() =>
-        new BillingProofs(_runner, _clock, _store).Evaluate(new BillingContext(_task, _rules, _childEnv, _userProfile, null));
+        new BillingProofs(_runner, _clock, _store).Evaluate(new BillingContext(_task, _rules, _childEnv, _userProfile, [_dir.File("managed-settings.json")]));
 
     private void WriteProfileFile(string relative, string json)
     {
