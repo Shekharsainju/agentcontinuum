@@ -99,4 +99,17 @@ public sealed class TaskRepositoryTests : IDisposable
 
         Assert.Equal(new string('f', 64), _tasks.Get("t1")!.BaselineFingerprint);
     }
+
+    [Fact]
+    public void SetCliPin_StoresPathHashAndVersion()
+    {
+        _tasks.Add(TestTasks.Sample("t1"));
+
+        _tasks.SetCliPin("t1", @"D:\tools\claude.exe", new string('b', 64), "2.1.305");
+
+        var task = _tasks.Get("t1")!;
+        Assert.Equal(@"D:\tools\claude.exe", task.CliPath);
+        Assert.Equal(new string('b', 64), task.CliSha256);
+        Assert.Equal("2.1.305", task.CliVersion);
+    }
 }
