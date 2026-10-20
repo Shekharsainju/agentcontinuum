@@ -103,6 +103,18 @@ public sealed class SettingsScannerTests : IDisposable
     }
 
     [Fact]
+    public void Scan_RuleExtraEnvKey_MatchesAnyCase()
+    {
+        var rules = _rules with { P2ExtraKeys = ["env.AWS_BEARER_TOKEN_BEDROCK", "awsAuthRefresh"] };
+        Write("project-local", """{"env":{"aws_bearer_token_bedrock":"SENTINEL-p2"},"AWSAUTHREFRESH":"x"}""");
+
+        var result = Scan(rules);
+
+        Assert.Equal(["project-local: env.AWS_BEARER_TOKEN_BEDROCK"], result.Problems);
+        Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
     public void Scan_LockedFile_Fails()
     {
         Write("project-local", "{}");
