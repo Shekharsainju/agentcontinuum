@@ -81,9 +81,9 @@ function Remove-ProbeProfileInstance {
 
 function Dismount-ProbeProfileHive {
   param([Parameter(Mandatory)][string]$Sid)
-  # Win32_UserProfile.Delete() leaves the profile folder and ProfileList entry behind while the
-  # account's hive is still mounted under HKU after a just-ended batch or secondary-logon session;
-  # unloading it first lets the delete complete instead of stalling until the hive drops on its own.
+  # Only called for a profile reporting Loaded, which Windows refuses to delete. A just-ended batch
+  # or secondary-logon session can leave the hive mounted under HKU for a while, so unloading it
+  # first is a precaution; output is discarded because a failed unload just leaves the retry to fail.
   [void](& reg.exe unload "HKU\$Sid" 2>&1)
 }
 
