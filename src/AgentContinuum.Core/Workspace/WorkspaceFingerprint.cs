@@ -16,7 +16,10 @@ public static class WorkspaceFingerprint
     // A repository's own config can name an fsmonitor or hook program; overriding both stops git running it.
     private static readonly string[] SafeConfig = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=NUL"];
 
-    public static FingerprintResult Compute(string worktree, string gitExe)
+    public const int MaxFiles = 50_000;
+    public const long MaxBytes = 2L * 1024 * 1024 * 1024;
+
+    public static FingerprintResult Compute(string worktree, string gitExe, int maxFiles = MaxFiles, long maxBytes = MaxBytes)
     {
         var (files, listError) = RunGit(gitExe, worktree, "ls-files", "-z", "--cached", "--others", "--exclude-standard");
         if (listError is not null)
@@ -30,15 +33,26 @@ public static class WorkspaceFingerprint
         }
 
         // Unmerged files are listed once per stage.
-        var paths = files.Split('\0', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var paths = files.Split('\0', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        if (paths.Count > maxFiles)
+        {
+            return new FingerprintResult(null, true, null);
+        }
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        long totalBytes = 0;
         try
         {
             foreach (var path in paths)
             {
+                var fullPath = Path.Combine(worktree, path);
+                totalBytes += FileSize(fullPath);
+                if (totalBytes > maxBytes)
+                {
+                    return new FingerprintResult(null, true, null);
+                }
                 sha.AppendData(Encoding.UTF8.GetBytes(path));
                 sha.AppendData([0]);
-                sha.AppendData(Encoding.ASCII.GetBytes(ContentHash(Path.Combine(worktree, path))));
+                sha.AppendData(Encoding.ASCII.GetBytes(ContentHash(fullPath)));
                 sha.AppendData([0]);
             }
         }
@@ -64,6 +78,12 @@ public static class WorkspaceFingerprint
         }
         using var stream = info.OpenRead();
         return Hex(SHA256.HashData(stream));
+    }
+
+    private static long FileSize(string fullPath)
+    {
+        var info = new FileInfo(fullPath);
+        return info.LinkTarget is null && info.Exists ? info.Length : 0;
     }
 
     private static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
