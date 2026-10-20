@@ -41,6 +41,7 @@ public sealed class StateStore : IDisposable
             reason TEXT,
             created_utc INTEGER NOT NULL
         );
+        CREATE UNIQUE INDEX one_live_op ON launch_ops(task_id) WHERE state IN ('INTENT','SPAWNED','EXITED');
         CREATE TABLE events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             op_id TEXT NOT NULL,
