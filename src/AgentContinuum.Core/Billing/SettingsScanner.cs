@@ -21,8 +21,9 @@ public static class SettingsScanner
     public static ProofResult Scan(string userProfile, string worktree, IReadOnlyList<string> managedPaths, ClaudeRules? rules)
     {
         var problems = new List<string>();
-        // With no managed path the managed scope would go unscanned, which must not read as a pass.
-        if (managedPaths.Count == 0)
+        // With no managed path the managed scope would go unscanned, and an unavailable special folder leaves a relative
+        // path that names some other file; neither may read as a pass.
+        if (managedPaths.Count == 0 || managedPaths.Any(p => string.IsNullOrEmpty(p) || !Path.IsPathFullyQualified(p)))
         {
             problems.Add("managed: no path");
         }
