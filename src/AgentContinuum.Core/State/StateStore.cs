@@ -118,6 +118,21 @@ public sealed class StateStore : IDisposable
         }
     }
 
+    public bool IntegrityOk()
+    {
+        try
+        {
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = "PRAGMA integrity_check";
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() && reader.GetString(0) == "ok" && !reader.Read();
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
     public T InTransaction<T>(Func<SqliteTransaction, T> work)
     {
         using var tx = Connection.BeginTransaction();
