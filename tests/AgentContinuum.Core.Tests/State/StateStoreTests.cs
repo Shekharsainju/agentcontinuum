@@ -1,4 +1,5 @@
 using AgentContinuum.Core.State;
+using Microsoft.Data.Sqlite;
 
 namespace AgentContinuum.Core.Tests.State;
 
@@ -15,6 +16,45 @@ public sealed class StateStoreTests : IDisposable
         using var cmd = store.Connection.CreateCommand();
         cmd.CommandText = sql;
         return cmd.ExecuteScalar();
+    }
+
+    private static void InsertOp(StateStore store, string opId, string taskId, string state)
+    {
+        using var cmd = store.Connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO launch_ops (op_id, task_id, window_id, attempt_no, state, created_utc)
+            VALUES ($op, $task, 0, 1, $state, 0)
+            """;
+        cmd.Parameters.AddWithValue("$op", opId);
+        cmd.Parameters.AddWithValue("$task", taskId);
+        cmd.Parameters.AddWithValue("$state", state);
+        cmd.ExecuteNonQuery();
+    }
+
+    [Theory]
+    [InlineData("INTENT")]
+    [InlineData("SPAWNED")]
+    [InlineData("EXITED")]
+    public void PartialIndex_RejectsSecondLiveOpForTask(string liveState)
+    {
+        using var store = Open();
+        InsertOp(store, "op1", "task1", liveState);
+
+        Assert.Throws<SqliteException>(() => InsertOp(store, "op2", "task1", "INTENT"));
+    }
+
+    [Theory]
+    [InlineData("CLASSIFIED")]
+    [InlineData("ABANDONED")]
+    [InlineData("INTERRUPTED")]
+    public void PartialIndex_AllowsNewOpAfterClassified(string finishedState)
+    {
+        using var store = Open();
+        InsertOp(store, "op1", "task1", finishedState);
+
+        InsertOp(store, "op2", "task1", "INTENT");
+
+        Assert.Equal(2L, Scalar(store, "SELECT count(*) FROM launch_ops WHERE task_id = 'task1'"));
     }
 
     [Fact]
