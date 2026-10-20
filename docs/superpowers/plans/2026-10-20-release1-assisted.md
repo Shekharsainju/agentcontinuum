@@ -161,10 +161,18 @@ Runs once you have committed the capture results.
 
 **Interfaces:**
 - Produces:
-  - `record ClaudeRules(string Versions, string[] P2ExtraKeys, CredentialRule? P3, AuthStatusRule? P4, FirstEventRule? P5, LimitSignalRule? Limit)` with `record CredentialRule(string File, string SubscriptionKey, string ApiKeyKey)`, `record AuthStatusRule(string[] Args, string JsonPath, string[] SubscriptionValues)`, `record FirstEventRule(string Type, string Subtype, string Field, string[] SubscriptionValues)` and `record LimitSignalRule(string Hook, string ReasonField, string[] ReasonValues, string? ResetField, string? ResetFormat)`.
+  - `record ClaudeRules(string Versions, string[] P2ExtraKeys, CredentialRule? P3, AuthStatusRule? P4, FirstEventRule? P5, ResultRule? Result, UsageRule? Usage, LimitSignalRule? Limit)`, matching the JSON written in Task 2 (camelCase keys), with:
+    - `record FieldRequirement(string Path, JsonElement[] Values)`
+    - `record CredentialRule(string File, string[] SubscriptionKeys, string ApiKeyFile, string[] ApiKeyKeys)` (files relative to `%USERPROFILE%`)
+    - `record AuthStatusRule(string[] Args, FieldRequirement[] Require, string[] RequirePresent)`
+    - `record FirstEventRule(string Type, string Subtype, string Field, string[] SubscriptionValues)`: matched on type and subtype, never on line position
+    - `record ResultRule(string Type, FieldRequirement[] SuccessWhen)`
+    - `record UsageRule(string Type, string ResetField, string ResetFormat, string[] UtilizationFields, OverageRule Overage)` and `record OverageRule(string StatusField, string InUseField, JsonElement[] SafeInUse)`
+    - `record LimitSignalRule(string Hook, string ReasonField, string[] ReasonValues, string? ResetField, string? ResetFormat)`
   - `static ClaudeRules? VersionRules.For(string cliVersion)`: `null` when no range matches. `VersionRules.LoadEmbedded()`; `VersionRules.Load(string json)` for tests.
   - `sealed class EventFilter { EventFilter(ClaudeRules rules); FilteredEvent? Accept(string line); }` with `record FilteredEvent(string Type, string? Subtype, string? SessionId, bool? IsError, string? AuthSource, IReadOnlyDictionary<string,string> LimitFields)`.
-  - Until Task 2 lands, the embedded file holds `[]`.
+  - The embedded file already exists from Task 2 with the 2.1.304 entry. `VersionRulesTests` must parse it.
+  - The filter also keeps the `Result` rule's fields and the `Usage` rule's reset, utilisation and overage fields.
 
 - [ ] **Step 1: Write failing tests:** `For_UnknownVersion_ReturnsNull`; `For_MatchesRange`; `Accept_KeepsOnlyAllowlistedFields`; `Accept_DropsSentinelEverywhere` (a line whose content fields hold `SENTINEL-c0ffee` gives a `FilteredEvent` whose serialised form lacks it); `Accept_UnparseableLine_ReturnsNull`; `Accept_LineOver1MB_ReturnsNull`; `Accept_CapsValuesAt200Chars`.
 - [ ] **Step 2:** Expect FAIL. Commit.
@@ -185,9 +193,9 @@ Runs once you have committed the capture results.
   - `HookRecorder.Record(StateStore store, string opId, Stream stdin, ClaudeRules? rules)`: reads at most 64 KB, keeps `hook_event_name`, `session_id` and the rule's reason and reset fields, and writes one `events` row of kind `hook`. Anything else is dropped. It never throws to the caller: on failure it writes a `hook_error` event with no payload.
   - `record HookEvent(string HookName, string? SessionId, IReadOnlyDictionary<string,string> Fields)`, read back with `HookRecorder.ForOp(StateStore store, string opId) -> IReadOnlyList<HookEvent>`.
   - `record Classification(Outcome Outcome, string Reason, long? ResetEpoch)`.
-  - `RunClassifier.Classify(ClaudeRules? rules, Guid sessionId, IReadOnlyList<FilteredEvent> stream, IReadOnlyList<HookEvent> hooks, int exitCode) -> Classification`: implements the spec's table. A limit signal counts as verified only when the rule exists, the reason value matches and `session_id` equals `sessionId`. `ResetEpoch` comes from the rule's reset field and format.
+  - `RunClassifier.Classify(ClaudeRules? rules, Guid sessionId, IReadOnlyList<FilteredEvent> stream, IReadOnlyList<HookEvent> hooks, int exitCode) -> Classification`: implements the spec's table. Success requires every `Result.SuccessWhen` requirement; `subtype` alone never decides it (E1: a 401 run reports `subtype: "success"`). A limit signal counts as verified only when the `Limit` rule exists, the reason value matches and `session_id` equals `sessionId`. `ResetEpoch` comes from the limit rule's reset field, else from the last `Usage` event's reset field.
 
-- [ ] **Step 1: Write failing tests:** `SuccessResult_Completed`; `VerifiedLimit_UsageLimitWithResetEpoch`; `LimitWithWrongSessionId_Ambiguous`; `LimitWithNoRule_Ambiguous`; `NoResultEvent_Failed`; `ErrorResult_Failed`; `HookRecorder_DropsSentinelPayload` (sentinel in `transcript_path` and in an unlisted field never reaches the database); `HookRecorder_OversizedInput_RecordsHookErrorOnly`.
+- [ ] **Step 1: Write failing tests:** `SuccessResult_Completed`; `SubtypeSuccessWithIsError_Failed`; `VerifiedLimit_UsageLimitWithResetEpoch`; `LimitWithWrongSessionId_Ambiguous`; `LimitWithNoRule_Ambiguous`; `NoResultEvent_Failed`; `ErrorResult_Failed`; `HookRecorder_DropsSentinelPayload` (sentinel in `transcript_path` and in an unlisted field never reaches the database); `HookRecorder_OversizedInput_RecordsHookErrorOnly`.
 - [ ] **Step 2:** Expect FAIL. Commit.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Expect PASS. Commit.
@@ -226,7 +234,7 @@ Runs once you have committed the capture results.
   - `SettingsScanner.Scan(string userProfile, string worktree, string? managedPath, ClaudeRules rules) -> ProofResult`: files `%ProgramData%\ClaudeCode\managed-settings.json`, `%USERPROFILE%\.claude\settings.json`, `%USERPROFILE%\.claude\settings.local.json`, `<worktree>\.claude\settings.json` and `<worktree>\.claude\settings.local.json`. A missing file passes; an unparseable one fails.
   - `interface ICommandRunner { CommandResult Run(string exe, string[] args, IReadOnlyDictionary<string,string> env, TimeSpan timeout); }`.
   - `record BillingContext(TaskRecord Task, ClaudeRules? Rules, IReadOnlyDictionary<string,string> ChildEnv, string UserProfile, string? ManagedSettingsPath)`.
-  - `BillingProofs.Evaluate(BillingContext ctx) -> BillingVerdict`, where `record BillingVerdict(bool Verified, IReadOnlyList<string> FailedProofs)` and proof IDs are `P1` to `P6`. A `null` rule for P3, P4 or P5 makes that proof fail as `Px_UNEVALUABLE`. P5 is evaluated at the first event by `FirstEventCheck.Matches(FilteredEvent, ClaudeRules) -> bool`, and pre-flight only requires the P5 rule to exist.
+  - `BillingProofs.Evaluate(BillingContext ctx) -> BillingVerdict`, where `record BillingVerdict(bool Verified, IReadOnlyList<string> FailedProofs)` and proof IDs are `P1` to `P6`. A `null` rule for P3, P4 or P5 makes that proof fail as `Px_UNEVALUABLE`. P5 is evaluated on the event matching the P5 rule's type and subtype by `FirstEventCheck.Matches(FilteredEvent, ClaudeRules) -> bool`; an assistant event arriving before it is a mismatch, and pre-flight only requires the P5 rule to exist.
   - P6: an `attestations` row of kind `overage_off` newer than 30 days.
 
 - [ ] **Step 1: Write failing tests:** `Env_DropsAnthropicVariables` (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_USE_BEDROCK` absent from the result); `Env_ContainsOnlyAllowlist`; `Scan_ApiKeyHelperInUserSettings_Fails`; `Scan_EnvBaseUrlInProjectSettings_Fails`; `Scan_UnparseableFile_Fails`; `Scan_MissingFiles_Pass`; `P3_KeyNamesOnly` (credentials file whose values are `SENTINEL-p3`; the proof passes or fails on key names, and the serialised `ProofResult` lacks the sentinel); `P4_SubscriptionValue_Passes`; `P4_Timeout_Fails`; `NullRule_Unevaluable` (theory over P3, P4, P5); `P6_31DaysOld_Fails`; `EachProofAloneBlocks` (AC9, theory over P2 to P6).

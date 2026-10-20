@@ -113,7 +113,7 @@ The filter reads stdout line by line and keeps only fields named in the version 
 | Verified limit signal (E1 rules) for this session ID | USAGE_LIMIT | WAITING_FOR_RESET, or NEEDS_ATTENTION "Attempts exhausted" |
 | Error result, non-zero exit, no result event | FAILED | NEEDS_ATTENTION "Run failed" |
 | Limit-like signal that is not verified | AMBIGUOUS | NEEDS_ATTENTION "Stopped, reason unverified" |
-| P5 mismatch on the first event | BILLING_MISMATCH | Job terminated; NEEDS_ATTENTION "Billing unverified" |
+| P5 mismatch on the `system/init` event, or no such event before the first assistant event | BILLING_MISMATCH | Job terminated; NEEDS_ATTENTION "Billing unverified" |
 
 If the process is still alive 10 seconds after a verified limit signal, the job is terminated, which also covers any in-process native resume. Stdin is closed after the prompt, so a session cannot wait on a menu (R3).
 
@@ -151,7 +151,7 @@ All checks run every time and every failure is reported, not just the first.
 | P2 | Managed, user and project settings files parse, and none sets `apiKeyHelper`, `env` entries for `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, or any key listed in the version rules. A project-scope billing setting forces UNVERIFIED. An unreadable file is a failure |
 | P3 | Credential type from the version rules, judged by key names only, never values |
 | P4 | Auth status command from the version rules, run with the P1 environment, reports a subscription |
-| P5 | The first event's auth-source field, named in the version rules, has a subscription value; otherwise BILLING_MISMATCH |
+| P5 | The auth-source field of the event named in the version rules (`system/init` on 2.1.304, which is not the first line) has a subscription value; otherwise BILLING_MISMATCH |
 | P6 | Your `ac attest-overage-off` is under 30 days old |
 
 ### Version rules

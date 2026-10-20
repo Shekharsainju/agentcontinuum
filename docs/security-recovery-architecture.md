@@ -234,10 +234,10 @@ Nine facts must be confirmed on your machine before this spec is build-ready. Th
 - [ ] `ac-controller` can enumerate `ac-agent` processes and their creation times; whether it can terminate ones it did not create (R11 known gap)
 - [ ] The CLIs honour `CLAUDE_CONFIG_DIR` and `CODEX_HOME` for login, settings and session storage under `ac-agent` (R11, A2)
 - [ ] A setting exists to disable native resume, per CLI version (R11)
-- [ ] A way to tell subscription login from API key without reading the secret (R15 P3)
-- [ ] An auth status command per CLI version (R15 P4)
-- [ ] A first-event field reporting the auth source in headless mode (R15 P5)
-- [ ] A usage-percentage source with no tool content; without one, the pre-limit checkpoint is dropped (R5)
+- [ ] A way to tell subscription login from API key without reading the secret (R15 P3). Claude Code 2.1.304: confirmed for a subscription login by credential key names; a stored API-key login is untested (`docs/e1-findings.md`)
+- [x] An auth status command per CLI version (R15 P4). Claude Code 2.1.304: `claude auth status`, JSON `authMethod` and `subscriptionType` (`docs/e1-findings.md`)
+- [x] A first-event field reporting the auth source in headless mode (R15 P5). Claude Code 2.1.304: `apiKeySource` on the `system/init` event, which is not the first line (`docs/e1-findings.md`)
+- [x] A usage-percentage source with no tool content; without one, the pre-limit checkpoint is dropped (R5). Claude Code 2.1.304: `rate_limit_event` window `utilization` and `resetsAt`, so the pre-limit checkpoint stays possible (`docs/e1-findings.md`)
 
 ## E0b gates
 
