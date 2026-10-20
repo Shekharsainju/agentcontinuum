@@ -84,6 +84,41 @@ public sealed class HookRecorderTests : IDisposable
         Assert.Equal("hook_error:{}", EventKinds()[1]);
     }
 
+    private sealed class FailingStream : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("pipe broken");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not json")]
+    [InlineData("[\"StopFailure\"]")]
+    [InlineData("{\"hook_event_name\":\"StopFailure\"} trailing")]
+    public void Record_UnparseableInput_RecordsHookError(string input)
+    {
+        HookRecorder.Record(_store, "op1", Input(input), Rules);
+
+        Assert.Equal(HookRecorder.HookErrorKind, Assert.Single(HookRecorder.ForOp(_store, "op1")).HookName);
+    }
+
+    [Fact]
+    public void Record_StreamThrows_RecordsHookErrorAndDoesNotThrow()
+    {
+        HookRecorder.Record(_store, "op1", new FailingStream(), Rules);
+
+        Assert.Equal(HookRecorder.HookErrorKind, Assert.Single(HookRecorder.ForOp(_store, "op1")).HookName);
+    }
+
+    [Fact]
+    public void Record_StoreUnusable_DoesNotThrow()
+    {
+        _store.Dispose();
+
+        var error = Record.Exception(() => HookRecorder.Record(_store, "op1", Input(Payload), Rules));
+
+        Assert.Null(error);
+    }
+
     [Fact]
     public void HookRecorder_DropsSentinelPayload()
     {
