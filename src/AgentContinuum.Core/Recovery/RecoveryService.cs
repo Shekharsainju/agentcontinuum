@@ -55,6 +55,12 @@ public sealed class RecoveryService
                 TryFlag(op.TaskId, RecoveryFailedReason);
             }
         }
+
+        // A crash between a task update and its op transition outside recovery can leave RUNNING with no live op.
+        foreach (var task in _tasks.List().Where(t => t.State == TaskState.Running && _ledger.Live(t.TaskId) is null))
+        {
+            TryFlag(task.TaskId, InterruptedRunReason);
+        }
     }
 
     private void Recover(LaunchOp op, Lazy<IReadOnlyList<ProcessInfo>?> processes)
