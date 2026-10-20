@@ -302,6 +302,19 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(OpState.Abandoned, _ledger.Get(intent)!.State);
     }
 
+    [Fact]
+    public void Intent_NoProcess_LastAttempt_NeedsAttention()
+    {
+        _tasks.Add(TestTasks.Sample("t2", maxAttempts: 1));
+        var intent = _ledger.BeginIntent("t2");
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Abandoned, _ledger.Get(intent)!.State);
+        var task = _tasks.Get("t2")!;
+        Assert.Equal((TaskState.NeedsAttention, "Attempts exhausted"), (task.State, task.AttentionReason));
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
