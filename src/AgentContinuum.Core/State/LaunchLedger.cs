@@ -31,6 +31,11 @@ public sealed class LaunchLedger
             ? used
             : throw new InvalidOperationException($"No task {taskId}.");
 
+        if (LiveOp(tx, taskId) is { } live)
+        {
+            throw new InvalidOperationException($"Task {taskId} already has live launch {live.OpId} in {StateText.ToText(live.State)}.");
+        }
+
         Execute(
             tx,
             """
@@ -58,6 +63,16 @@ public sealed class LaunchLedger
         using var cmd = _store.Connection.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM launch_ops WHERE op_id = $op_id";
         cmd.Parameters.AddWithValue("$op_id", opId);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? Read(reader) : null;
+    }
+
+    private LaunchOp? LiveOp(SqliteTransaction? tx, string taskId)
+    {
+        using var cmd = Command(
+            tx,
+            $"SELECT {Columns} FROM launch_ops WHERE task_id = $task_id AND state IN ('INTENT','SPAWNED','EXITED')",
+            [("$task_id", taskId)]);
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? Read(reader) : null;
     }
