@@ -77,6 +77,9 @@ public sealed class TaskRepository
     public void SetSchedule(string taskId, long? resetEpoch, long? permittedEpoch) =>
         Update(taskId, "reset_expected_at = $reset, attempt_permitted_at = $permitted", ("$reset", resetEpoch), ("$permitted", permittedEpoch));
 
+    public void SetBaseline(string taskId, string fingerprint) =>
+        Update(taskId, "baseline_fingerprint = $fingerprint", ("$fingerprint", fingerprint));
+
     private void Update(string taskId, string assignments, params (string Name, object? Value)[] values)
     {
         using var cmd = _store.Connection.CreateCommand();
