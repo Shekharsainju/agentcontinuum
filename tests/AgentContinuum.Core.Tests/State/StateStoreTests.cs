@@ -58,6 +58,35 @@ public sealed class StateStoreTests : IDisposable
     }
 
     [Fact]
+    public void IntegrityOk_TrueOnFreshDb()
+    {
+        using var store = Open();
+
+        Assert.True(store.IntegrityOk());
+    }
+
+    [Fact]
+    public void IntegrityOk_FalseOnCorruptPage()
+    {
+        var dbPath = _dir.File(Path.Combine("state", "ac.db"));
+        using (var store = Open())
+        {
+            for (var i = 0; i < 200; i++)
+            {
+                InsertOp(store, $"op{i}", $"task{i}", "CLASSIFIED");
+            }
+        }
+        var bytes = File.ReadAllBytes(dbPath);
+        Assert.True(bytes.Length > 16384);
+        Array.Fill(bytes, (byte)0xA5, 8192, 4096);
+        File.WriteAllBytes(dbPath, bytes);
+
+        using var reopened = Open();
+
+        Assert.False(reopened.IntegrityOk());
+    }
+
+    [Fact]
     public void Open_SetsWalAndSynchronousFull()
     {
         using var store = Open();
