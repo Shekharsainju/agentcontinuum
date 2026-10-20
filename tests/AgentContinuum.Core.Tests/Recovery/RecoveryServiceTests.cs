@@ -25,6 +25,7 @@ public sealed class RecoveryServiceTests : IDisposable
         _tasks = new TaskRepository(_store);
         _ledger = new LaunchLedger(_store);
         _tasks.Add(_task);
+        _lister.Processes.Add(new ProcessInfo(200, 1, @"C:\Windows\explorer.exe", "explorer.exe"));
     }
 
     public void Dispose()
@@ -40,7 +41,7 @@ public sealed class RecoveryServiceTests : IDisposable
     public void Intent_NoProcess_Abandoned_TaskWaiting()
     {
         var opId = _ledger.BeginIntent("t1");
-        _lister.Processes.Add(new ProcessInfo(100, 1, "claude.exe -p --session-id 11111111-2222-3333-4444-555555555555"));
+        _lister.Processes.Add(new ProcessInfo(100, 1, _task.CliPath, "claude.exe -p --session-id 11111111-2222-3333-4444-555555555555"));
 
         Service().Reconcile();
 
@@ -58,7 +59,7 @@ public sealed class RecoveryServiceTests : IDisposable
     {
         var opId = _ledger.BeginIntent("t1");
         var session = _task.SessionId.ToString("D");
-        _lister.Processes.Add(new ProcessInfo(100, 1, string.Format(commandLine, session, session.ToUpperInvariant())));
+        _lister.Processes.Add(new ProcessInfo(100, 1, _task.CliPath, string.Format(commandLine, session, session.ToUpperInvariant())));
 
         Service().Reconcile();
 
@@ -256,6 +257,49 @@ public sealed class RecoveryServiceTests : IDisposable
             [OpState.Abandoned, OpState.Interrupted, OpState.Classified],
             new[] { intent, spawned, exited }.Select(id => _ledger.Get(id)!.State));
         Assert.All(_tasks.List(), t => Assert.NotEqual(TaskState.Running, t.State));
+    }
+
+    public static TheoryData<string?, string?> UnknownProcesses() => new()
+    {
+        { TestTasks.Sample("x").CliPath, null },
+        { TestTasks.Sample("x").CliPath.ToUpperInvariant(), "" },
+        { null, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(UnknownProcesses))]
+    public void Intent_UnreadableProcess_ProcessCheckFailed(string? executablePath, string? commandLine)
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _lister.Processes.Add(new ProcessInfo(100, 1, executablePath, commandLine));
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Intent, _ledger.Get(intent)!.State);
+        Assert.Equal((TaskState.NeedsAttention, "Process check failed"), (_tasks.Get("t1")!.State, _tasks.Get("t1")!.AttentionReason));
+    }
+
+    [Fact]
+    public void Intent_EmptyProcessList_ProcessCheckFailed()
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _lister.Processes.Clear();
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Intent, _ledger.Get(intent)!.State);
+        Assert.Equal("Process check failed", _tasks.Get("t1")!.AttentionReason);
+    }
+
+    [Fact]
+    public void Intent_OtherProcessWithUnreadableCommandLine_Abandoned()
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _lister.Processes.Add(new ProcessInfo(200, 1, @"C:\Windows\System32\notepad.exe", null));
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Abandoned, _ledger.Get(intent)!.State);
     }
 
     private sealed class FakeLister : IProcessLister
