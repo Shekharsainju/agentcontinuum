@@ -204,4 +204,31 @@ function Write-E1Result {
   [IO.File]::WriteAllText((Join-Path $Dir "$Name.json"), $json, (New-Object Text.UTF8Encoding($false)))
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command, Invoke-E1StreamRun, Write-E1Result
+function Get-E1Sha256 {
+  param([Parameter(Mandatory)][string]$Path)
+  $sha = [Security.Cryptography.SHA256]::Create()
+  $fs = [IO.File]::OpenRead($Path)
+  try { -join ($sha.ComputeHash($fs) | ForEach-Object { $_.ToString("X2") }) }
+  finally { $fs.Dispose(); $sha.Dispose() }
+}
+
+function Get-E1Cli {
+  <# Resolves the CLI's path, link target, hash and version. #>
+  param([string]$Command = 'claude')
+  $cmd = Get-Command -Name $Command -CommandType Application -ErrorAction Stop | Select-Object -First 1
+  $path = $cmd.Source
+  $item = Get-Item -LiteralPath $path
+  $target = $null
+  if ($item.PSObject.Properties['LinkType'] -and $item.LinkType) { $target = @($item.Target)[0] }
+  $r = Invoke-E1Command -Exe $path -Arguments '--version' -TimeoutSeconds 30
+  $version = if ($r.stdout -match '^\s*(\S+)') { $Matches[1] } else { $null }
+  [ordered]@{
+    path    = $path
+    target  = $target
+    is_exe  = ([IO.Path]::GetExtension($path) -eq '.exe')
+    sha256  = Get-E1Sha256 -Path $path
+    version = $version
+  }
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email, Invoke-E1Command, Invoke-E1StreamRun, Write-E1Result, Get-E1Cli
