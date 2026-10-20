@@ -6,6 +6,13 @@ if (args is ["--version"])
     return 0;
 }
 
+if (args is ["--fake-hook-sink", var sinkPath])
+{
+    using var sink = File.Create(sinkPath);
+    Console.OpenStandardInput().CopyTo(sink);
+    return 0;
+}
+
 if (!Options.TryParse(args, out var options))
 {
     Console.Error.WriteLine("fake-claude: unsupported arguments");
@@ -47,7 +54,41 @@ foreach (var node in scenario["events"]?.AsArray() ?? [])
     Emit(e);
 }
 
+if (scenario["hook"] is JsonObject hook && options.SettingsPath is { } settingsPath)
+{
+    RunHook(hook, settingsPath, sessionId);
+}
+
 return scenario["exitCode"]?.GetValue<int>() ?? 0;
+
+static void RunHook(JsonObject hook, string settingsPath, string sessionId)
+{
+    var name = hook["name"]!.GetValue<string>();
+    var payload = hook["payload"]?.DeepClone().AsObject() ?? [];
+    payload["hook_event_name"] = name;
+    if (!payload.ContainsKey("session_id"))
+    {
+        payload["session_id"] = sessionId;
+    }
+
+    var settings = JsonNode.Parse(File.ReadAllText(settingsPath))!;
+    var commands = settings["hooks"]?[name]?.AsArray()
+        .SelectMany(matcher => matcher!["hooks"]!.AsArray())
+        .Select(h => h!["command"]!.GetValue<string>()) ?? [];
+    foreach (var command in commands)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"))
+        {
+            Arguments = $"/d /s /c \"{command}\"",
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+        };
+        using var process = System.Diagnostics.Process.Start(info)!;
+        process.StandardInput.Write(payload.ToJsonString());
+        process.StandardInput.Close();
+        process.WaitForExit();
+    }
+}
 
 static void Emit(JsonObject e)
 {
