@@ -63,6 +63,22 @@ public sealed class WorkspaceFingerprintTests : IDisposable
     }
 
     [Fact]
+    public void Fingerprint_SpacesAndNonAscii_Stable()
+    {
+        var repo = GitRepo.Init(_dir.File(Path.Combine("a b", "rèpo ñ")));
+        repo.Write("ü ñ.txt", "first");
+        repo.CommitAll();
+        repo.Write("dir ä/新しい.txt", "untracked");
+
+        var before = Hash(repo.Path);
+        Assert.Equal(before, Hash(repo.Path));
+
+        repo.Write("dir ä/新しい.txt", "edited");
+
+        Assert.NotEqual(before, Hash(repo.Path));
+    }
+
+    [Fact]
     public void Fingerprint_IgnoresGitignored()
     {
         var before = Hash();
