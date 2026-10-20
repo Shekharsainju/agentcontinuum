@@ -63,4 +63,59 @@ public sealed class RunClassifierTests
 
         Assert.Equal(Outcome.Failed, result.Outcome);
     }
+
+    private static readonly ClaudeRules LimitRules = Rules with
+    {
+        Limit = new LimitSignalRule("StopFailure", "error", ["rate_limit"], "resets_at", JsonLiteral.UnixSeconds),
+    };
+
+    private static HookEvent Hook(string name, Guid session, string reason, long? resetsAt = null)
+    {
+        var fields = new Dictionary<string, string> { ["error"] = $"\"{reason}\"" };
+        if (resetsAt is { } reset)
+        {
+            fields["resets_at"] = reset.ToString();
+        }
+        return new HookEvent(name, session.ToString(), fields);
+    }
+
+    private static FilteredEvent Usage(long resetsAt) =>
+        new("rate_limit_event", null, Session.ToString(), null, null, new Dictionary<string, string>
+        {
+            ["rate_limit_info.resetsAt"] = resetsAt.ToString(),
+        });
+
+    [Fact]
+    public void VerifiedLimit_UsageLimitWithResetEpoch()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Init(), Usage(1_700_000_000), Result(true, "api_error")],
+            [Hook("StopFailure", Session, "rate_limit", resetsAt: 1_800_000_000)],
+            1);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
+    }
+
+    [Fact]
+    public void VerifiedLimitWithoutHookReset_ResetFromLastUsageEvent()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Init(), Usage(1_700_000_000), Usage(1_800_000_000)],
+            [Hook("StopFailure", Session, "rate_limit")],
+            1);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
+    }
+
+    [Fact]
+    public void VerifiedLimitWithoutAnyReset_NullEpoch()
+    {
+        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Session, "rate_limit")], 0);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", null), result);
+    }
 }
