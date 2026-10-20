@@ -59,6 +59,8 @@ if (scenario["hook"] is JsonObject hook && options.SettingsPath is { } settingsP
     RunHook(hook, settingsPath, sessionId);
 }
 
+Thread.Sleep(TimeSpan.FromSeconds(scenario["lingerSeconds"]?.GetValue<int>() ?? 0));
+
 return scenario["exitCode"]?.GetValue<int>() ?? 0;
 
 static void RunHook(JsonObject hook, string settingsPath, string sessionId)
