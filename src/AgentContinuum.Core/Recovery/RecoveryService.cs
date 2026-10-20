@@ -106,6 +106,8 @@ public sealed class RecoveryService
         }
         else
         {
+            // No schedule tells the scheduler to offer at once and say the launch did not start.
+            _tasks.SetSchedule(op.TaskId, null, null);
             _tasks.SetState(op.TaskId, TaskState.WaitingForReset, null);
         }
         _ledger.Abandon(op.OpId);
