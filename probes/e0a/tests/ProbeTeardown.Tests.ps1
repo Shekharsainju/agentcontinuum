@@ -65,6 +65,16 @@ Describe 'Invoke-ProbeTeardown' {
     (($r.Steps | Where-Object Name -eq 'RemoveAccounts')) | Should Not BeNullOrEmpty
   }
 
+  It 'reports the profile and the underlying error when a profile cannot be deleted' {
+    Mock -ModuleName ProbeTeardown Start-Sleep { }
+    Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl' } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
+    Mock -ModuleName ProbeTeardown Remove-ProbeProfileInstance { throw 'Method "Delete" not found' }
+    $r = Invoke-ProbeTeardown -ResultsRoot 'TestDrive:\'
+    $err = ($r.Steps | Where-Object Name -eq 'DeleteProfiles').Error
+    $err | Should Match ([regex]::Escape('C:\Users\ac-probe-ctl'))
+    $err | Should Match ([regex]::Escape('Method "Delete" not found'))
+  }
+
   It 'unloads a loaded profile hive before deleting it' {
     Mock -ModuleName ProbeTeardown Get-CimInstance { [pscustomobject]@{ SID = 'S-1-5-21-x'; LocalPath = 'C:\Users\ac-probe-ctl'; Loaded = $true } } -ParameterFilter { $ClassName -eq 'Win32_UserProfile' }
     Mock -ModuleName ProbeTeardown Dismount-ProbeProfileHive { }
