@@ -329,6 +329,20 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(TaskState.Queued, _tasks.Get("t1")!.State);
     }
 
+    [Fact]
+    public void Intent_NoProcess_ClearsEarlierSchedule()
+    {
+        _tasks.SetSchedule("t1", 1_800_000_000, 1_800_000_120);
+        _ledger.BeginIntent("t1");
+
+        Service().Reconcile();
+
+        var task = _tasks.Get("t1")!;
+        Assert.Equal(TaskState.WaitingForReset, task.State);
+        Assert.Null(task.ResetExpectedAtEpoch);
+        Assert.Null(task.AttemptPermittedAtEpoch);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
