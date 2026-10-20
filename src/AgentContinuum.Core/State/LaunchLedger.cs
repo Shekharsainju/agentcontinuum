@@ -5,50 +5,53 @@ namespace AgentContinuum.Core.State;
 
 public sealed class LaunchLedger
 {
+    public const string IntentInserted = "intent-inserted";
+
     private const string Columns = """
         op_id, task_id, window_id, attempt_no, state, pid, proc_created_at, session_id, exit_code, outcome, reason, created_utc
         """;
 
     private readonly StateStore _store;
     private readonly TimeProvider _time;
+    private readonly Action<string> _checkpoint;
 
-    public LaunchLedger(StateStore store, TimeProvider? time = null)
+    // checkpoint lets fault injection stop a launch at an R13 crash point.
+    public LaunchLedger(StateStore store, TimeProvider? time = null, Action<string>? checkpoint = null)
     {
         _store = store;
         _time = time ?? TimeProvider.System;
+        _checkpoint = checkpoint ?? (_ => { });
     }
 
-    public string BeginIntent(string taskId)
+    public string BeginIntent(string taskId) => _store.InTransaction(tx =>
     {
         var opId = Guid.NewGuid().ToString("N");
 
-        using var read = _store.Connection.CreateCommand();
-        read.CommandText = "SELECT attempts_used FROM tasks WHERE task_id = $task_id";
-        read.Parameters.AddWithValue("$task_id", taskId);
-        var attemptsUsed = read.ExecuteScalar() is long used
+        var attemptsUsed = Scalar(tx, "SELECT attempts_used FROM tasks WHERE task_id = $task_id", ("$task_id", taskId)) is long used
             ? used
             : throw new InvalidOperationException($"No task {taskId}.");
 
-        using var insert = _store.Connection.CreateCommand();
-        insert.CommandText = $"""
+        Execute(
+            tx,
+            """
             INSERT INTO launch_ops (op_id, task_id, window_id, attempt_no, state, created_utc)
             VALUES ($op_id, $task_id, 0, $attempt_no, $state, $created_utc)
-            """;
-        insert.Parameters.AddWithValue("$op_id", opId);
-        insert.Parameters.AddWithValue("$task_id", taskId);
-        insert.Parameters.AddWithValue("$attempt_no", attemptsUsed + 1);
-        insert.Parameters.AddWithValue("$state", StateText.ToText(OpState.Intent));
-        insert.Parameters.AddWithValue("$created_utc", _time.GetUtcNow().ToUnixTimeSeconds());
-        insert.ExecuteNonQuery();
+            """,
+            ("$op_id", opId),
+            ("$task_id", taskId),
+            ("$attempt_no", attemptsUsed + 1),
+            ("$state", StateText.ToText(OpState.Intent)),
+            ("$created_utc", _time.GetUtcNow().ToUnixTimeSeconds()));
+        _checkpoint(IntentInserted);
 
-        using var count = _store.Connection.CreateCommand();
-        count.CommandText = "UPDATE tasks SET attempts_used = attempts_used + 1, state = $state WHERE task_id = $task_id";
-        count.Parameters.AddWithValue("$task_id", taskId);
-        count.Parameters.AddWithValue("$state", StateText.ToText(TaskState.Running));
-        count.ExecuteNonQuery();
+        Execute(
+            tx,
+            "UPDATE tasks SET attempts_used = attempts_used + 1, state = $state WHERE task_id = $task_id",
+            ("$task_id", taskId),
+            ("$state", StateText.ToText(TaskState.Running)));
 
         return opId;
-    }
+    });
 
     public LaunchOp? Get(string opId)
     {
@@ -57,6 +60,30 @@ public sealed class LaunchLedger
         cmd.Parameters.AddWithValue("$op_id", opId);
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? Read(reader) : null;
+    }
+
+    private SqliteCommand Command(SqliteTransaction? tx, string sql, (string Name, object? Value)[] values)
+    {
+        var cmd = _store.Connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        foreach (var (name, value) in values)
+        {
+            cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        }
+        return cmd;
+    }
+
+    private int Execute(SqliteTransaction? tx, string sql, params (string Name, object? Value)[] values)
+    {
+        using var cmd = Command(tx, sql, values);
+        return cmd.ExecuteNonQuery();
+    }
+
+    private object? Scalar(SqliteTransaction? tx, string sql, params (string Name, object? Value)[] values)
+    {
+        using var cmd = Command(tx, sql, values);
+        return cmd.ExecuteScalar();
     }
 
     private static LaunchOp Read(SqliteDataReader r) => new(
