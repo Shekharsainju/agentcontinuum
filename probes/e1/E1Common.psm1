@@ -70,4 +70,10 @@ function Get-E1KeyPaths {
   @($shape.Keys)
 }
 
-Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths
+function Hide-E1Email {
+  <# Replaces email addresses in a name, such as a Credential Manager target, with a placeholder. #>
+  param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+  $Text -replace '[^\s@:=]+@[^\s@]+\.[A-Za-z]{2,}', '<email>'
+}
+
+Export-ModuleMember -Function Protect-E1Value, ConvertTo-E1Shape, Get-E1TextShape, Get-E1KeyPaths, Hide-E1Email

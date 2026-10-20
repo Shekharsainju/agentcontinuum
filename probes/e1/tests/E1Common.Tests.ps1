@@ -52,6 +52,6 @@ Describe 'Get-E1KeyPaths' {
 }
 
 Describe 'Hide-E1Email' {
-  It 'replaces email addresses' { Hide-E1Email 'Claude Code-me@example.com' | Should Be 'Claude Code-<email>' }
+  It 'replaces email addresses' { Hide-E1Email 'Claude Code me@example.com' | Should Be 'Claude Code <email>' }
   It 'leaves other text alone' { Hide-E1Email 'Claude Code-credentials' | Should Be 'Claude Code-credentials' }
 }
