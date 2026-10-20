@@ -86,4 +86,25 @@ public sealed class EventFilterTests
     {
         Assert.Null(Filter().Accept(line));
     }
+
+    private static string ResultLineOfBytes(int totalBytes, char pad)
+    {
+        const string head = "{\"type\":\"result\",\"is_error\":false,\"result\":\"";
+        const string tail = "\"}";
+        var padBytes = System.Text.Encoding.UTF8.GetByteCount(pad.ToString());
+        var padCount = (totalBytes - head.Length - tail.Length) / padBytes;
+        var line = head + new string(pad, padCount) + tail;
+        Assert.Equal(totalBytes, System.Text.Encoding.UTF8.GetByteCount(line));
+        return line;
+    }
+
+    [Fact]
+    public void Accept_LineOver1MB_ReturnsNull()
+    {
+        var filter = Filter();
+
+        Assert.NotNull(filter.Accept(ResultLineOfBytes(1024 * 1024, 'x')));
+        Assert.Null(filter.Accept(ResultLineOfBytes(1024 * 1024 + 1, 'x')));
+        Assert.Null(filter.Accept(ResultLineOfBytes(1024 * 1024 + 2, '\u00fc')));
+    }
 }
