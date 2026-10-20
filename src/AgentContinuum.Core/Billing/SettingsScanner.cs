@@ -21,7 +21,8 @@ public static class SettingsScanner
                 continue;
             }
 
-            if (Read(path) is not { } doc)
+            // A file Claude Code might read but this scan cannot is a failure, never a pass.
+            if (JsonPaths.ReadObject(path) is not { } doc)
             {
                 problems.Add($"{scope}: unreadable");
                 continue;
@@ -33,25 +34,6 @@ public static class SettingsScanner
             }
         }
         return ProofResult.FromProblems(problems);
-    }
-
-    // A file Claude Code might read but this scan cannot is a failure, never a pass.
-    private static JsonDocument? Read(string path)
-    {
-        try
-        {
-            var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-            if (doc.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                return doc;
-            }
-            doc.Dispose();
-            return null;
-        }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
     }
 
     private static void CheckSettings(string scope, JsonElement root, ClaudeRules? rules, List<string> problems)

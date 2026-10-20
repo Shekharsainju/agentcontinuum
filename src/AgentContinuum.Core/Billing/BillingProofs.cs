@@ -28,6 +28,14 @@ public sealed class BillingProofs
         {
             failed.Add("P2");
         }
+        if (ctx.Rules?.P3 is not { } p3)
+        {
+            failed.Add("P3_UNEVALUABLE");
+        }
+        else if (!CredentialCheck.Check(ctx.UserProfile, p3).Pass)
+        {
+            failed.Add("P3");
+        }
         return new BillingVerdict(failed.Count == 0, failed);
     }
 }
