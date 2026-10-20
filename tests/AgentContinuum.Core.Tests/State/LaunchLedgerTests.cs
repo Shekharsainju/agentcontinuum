@@ -231,4 +231,24 @@ public sealed class LaunchLedgerTests : IDisposable
         Assert.Equal(second, ledger.Live("t1")!.OpId);
         Assert.Equal(2, ledger.Get(second)!.AttemptNo);
     }
+
+    private static void Finish(LaunchLedger ledger, string opId, Outcome outcome)
+    {
+        ledger.MarkSpawned(opId, 4242, 133_000_000_000_000_000, Session);
+        ledger.MarkExited(opId, 1);
+        ledger.Classify(opId, outcome, "test");
+    }
+
+    [Fact]
+    public void BeginIntent_WindowIdCountsPriorUsageLimits()
+    {
+        var ledger = new LaunchLedger(_store);
+        Finish(ledger, ledger.BeginIntent("t1"), Outcome.UsageLimit);
+        Finish(ledger, ledger.BeginIntent("t1"), Outcome.Failed);
+
+        var third = ledger.BeginIntent("t1");
+
+        Assert.Equal(1, ledger.Get(third)!.WindowId);
+        Assert.Equal(3, ledger.Get(third)!.AttemptNo);
+    }
 }
