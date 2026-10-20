@@ -19,17 +19,17 @@ public sealed class AttestationsTests : IDisposable
     }
 
     [Fact]
-    public void Latest_ReturnsNewestOfKind()
+    public void Latest_ReturnsLastRecordedOfKind()
     {
         var attestations = new Attestations(_store);
-        var older = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
-        var newer = older.AddDays(10);
+        var recordedWhileClockAhead = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
+        var recordedAfterFix = recordedWhileClockAhead.AddDays(-10);
 
-        attestations.Record(Attestations.OverageOff, newer);
-        attestations.Record(Attestations.OverageOff, older);
-        attestations.Record("other", newer.AddDays(5));
+        attestations.Record(Attestations.OverageOff, recordedWhileClockAhead);
+        attestations.Record(Attestations.OverageOff, recordedAfterFix);
+        attestations.Record("other", recordedWhileClockAhead.AddDays(5));
 
-        Assert.Equal(newer, attestations.Latest(Attestations.OverageOff));
+        Assert.Equal(recordedAfterFix, attestations.Latest(Attestations.OverageOff));
         Assert.Null(attestations.Latest("missing"));
     }
 }
