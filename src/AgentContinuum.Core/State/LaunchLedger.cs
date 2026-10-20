@@ -106,6 +106,18 @@ public sealed class LaunchLedger
 
     public LaunchOp? Live(string taskId) => LiveOp(null, taskId);
 
+    public IReadOnlyList<LaunchOp> AllLive()
+    {
+        using var cmd = Command(null, $"SELECT {Columns} FROM launch_ops WHERE state IN ('INTENT','SPAWNED','EXITED') ORDER BY rowid", []);
+        using var reader = cmd.ExecuteReader();
+        var ops = new List<LaunchOp>();
+        while (reader.Read())
+        {
+            ops.Add(Read(reader));
+        }
+        return ops;
+    }
+
     // The guarded UPDATE makes check and write one statement, so a concurrent writer cannot slip between them.
     private void Transition(string opId, OpState[] from, OpState to, string? assignments, params (string Name, object? Value)[] values)
     {
