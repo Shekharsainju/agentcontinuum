@@ -25,6 +25,7 @@ public static class FakeClaudeProcess
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            StandardInputEncoding = new System.Text.UTF8Encoding(false),
         };
         foreach (var arg in args)
         {

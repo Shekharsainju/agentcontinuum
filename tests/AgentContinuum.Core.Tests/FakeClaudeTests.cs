@@ -61,6 +61,28 @@ public sealed class FakeClaudeTests : IDisposable
         Assert.Equal([$$"""{"type":"assistant","session_id":"{{Session}}"}"""], stdout);
     }
 
+    [Fact]
+    public void RecordsArgsWithoutStdinContent()
+    {
+        Scenario("""{ "events": [], "exitCode": 0 }""");
+        var env = FakeClaudeProcess.MinimalEnv();
+        env["USERPROFILE"] = _dir.Path;
+        const string prompt = "SENTINEL-stdin: fix the bug in ü.txt";
+
+        FakeClaudeProcess.Run(_dir.Path, HeadlessArgs(), prompt, env);
+
+        var recorded = File.ReadAllText(_dir.File("fake-claude-args.json"));
+        using var doc = System.Text.Json.JsonDocument.Parse(recorded);
+        var root = doc.RootElement;
+        Assert.Equal(HeadlessArgs(), root.GetProperty("args").EnumerateArray().Select(a => a.GetString()));
+        Assert.Equal(
+            env.Keys.Order(StringComparer.OrdinalIgnoreCase),
+            root.GetProperty("envNames").EnumerateArray().Select(a => a.GetString()!).Order(StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(prompt), root.GetProperty("stdinLength").GetInt32());
+        Assert.DoesNotContain("SENTINEL-stdin", recorded);
+    }
+
     [Theory]
     [InlineData("--dangerously-skip-permissions")]
     [InlineData("--continue")]
