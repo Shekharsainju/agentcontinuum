@@ -1,7 +1,10 @@
+using System.Text;
 using AgentContinuum.Core.Classify;
+using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Recovery;
+using AgentContinuum.Core.Rules;
 using AgentContinuum.Core.State;
 
 namespace AgentContinuum.Core.Tests.Recovery;
@@ -77,6 +80,62 @@ public sealed class RecoveryServiceTests : IDisposable
         var task = _tasks.Get("t1")!;
         Assert.Equal((TaskState.NeedsAttention, "Interrupted run"), (task.State, task.AttentionReason));
         Assert.Equal(1, task.AttemptsUsed);
+    }
+
+    private string ExitedOp(int exitCode)
+    {
+        var opId = _ledger.BeginIntent("t1");
+        _ledger.MarkSpawned(opId, 100, 1, _task.SessionId);
+        _ledger.MarkExited(opId, exitCode);
+        return opId;
+    }
+
+    private static FilteredEvent Event(string type, string? subtype, Dictionary<string, string> fields) =>
+        new(type, subtype, null, null, null, fields);
+
+    [Fact]
+    public void Exited_ClassifiedFromRecordedEvents()
+    {
+        var opId = ExitedOp(0);
+        StreamEventLog.Append(_store, opId, Event("system", "init", []));
+        StreamEventLog.Append(_store, opId, Event("result", "success", new() { ["is_error"] = "false", ["terminal_reason"] = "\"completed\"" }));
+
+        Service().Reconcile();
+
+        var op = _ledger.Get(opId)!;
+        Assert.Equal((OpState.Classified, Outcome.Completed), (op.State, op.Outcome));
+        Assert.Equal(TaskState.Completed, _tasks.Get("t1")!.State);
+    }
+
+    [Fact]
+    public void Exited_NoEvents_Failed()
+    {
+        var opId = ExitedOp(1);
+
+        Service().Reconcile();
+
+        var op = _ledger.Get(opId)!;
+        Assert.Equal((OpState.Classified, Outcome.Failed, "Run failed"), (op.State, op.Outcome, op.Reason));
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Run failed"), (task.State, task.AttentionReason));
+    }
+
+    [Fact]
+    public void Exited_VerifiedLimitHook_HandsResetToScheduler()
+    {
+        var rules = VersionRules.LoadEmbedded().Entries[0] with
+        {
+            Limit = new LimitSignalRule("StopFailure", "error", ["rate_limit"], "resets_at", JsonLiteral.UnixSeconds),
+        };
+        var opId = ExitedOp(1);
+        var payload = $$"""{"hook_event_name":"StopFailure","session_id":"{{_task.SessionId}}","error":"rate_limit","resets_at":1800000000}""";
+        HookRecorder.Record(_store, opId, new MemoryStream(Encoding.UTF8.GetBytes(payload)), rules);
+        var service = new RecoveryService(_store, _ledger, _tasks, _lister, new OutcomeApplier(_tasks, _usageLimits), _ => rules);
+
+        service.Reconcile();
+
+        Assert.Equal(Outcome.UsageLimit, _ledger.Get(opId)!.Outcome);
+        Assert.Equal([("t1", (long?)1_800_000_000)], _usageLimits.Calls);
     }
 
     private sealed class FakeLister : IProcessLister
