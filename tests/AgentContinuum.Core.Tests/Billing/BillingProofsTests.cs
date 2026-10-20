@@ -34,6 +34,7 @@ public sealed class BillingProofsTests : IDisposable
         _runner.Result = new CommandResult(0, SubscriptionStatus, false);
         WriteProfileFile(CredentialsFile, Credentials);
         WriteProfileFile(".claude.json", """{"oauthAccount":{"emailAddress":"SENTINEL-p3@example.com"},"theme":"dark"}""");
+        new Attestations(_store).Record(Attestations.OverageOff, _clock.UtcNow.AddDays(-1));
     }
 
     private const string Credentials =
@@ -84,6 +85,9 @@ public sealed class BillingProofsTests : IDisposable
             case "P5_RULE":
                 _rules = _rules! with { P5 = null };
                 break;
+            case "P6":
+                _clock.UtcNow = _clock.UtcNow.AddDays(31);
+                break;
         }
     }
 
@@ -123,6 +127,36 @@ public sealed class BillingProofsTests : IDisposable
         _runner.Result = new CommandResult(exitCode, stdout, false);
 
         Assert.Equal(["P4"], Evaluate().FailedProofs);
+    }
+
+    [Theory]
+    [InlineData(29, true)]
+    [InlineData(30, false)]
+    [InlineData(31, false)]
+    [InlineData(-1, false)]
+    public void P6_AttestationAge(int daysOld, bool passes)
+    {
+        _clock.UtcNow = _clock.UtcNow.AddDays(daysOld - 1);
+
+        Assert.Equal(passes, !Evaluate().FailedProofs.Contains("P6"));
+    }
+
+    [Fact]
+    public void P6_31DaysOld_Fails()
+    {
+        _clock.UtcNow = _clock.UtcNow.AddDays(30);
+
+        Assert.Equal(["P6"], Evaluate().FailedProofs);
+    }
+
+    [Fact]
+    public void P6_NoAttestation_Fails()
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM attestations";
+        cmd.ExecuteNonQuery();
+
+        Assert.Equal(["P6"], Evaluate().FailedProofs);
     }
 
     [Fact]
@@ -206,6 +240,7 @@ public sealed class BillingProofsTests : IDisposable
     [InlineData("P4", "P4")]
     [InlineData("P4_RULE", "P4_UNEVALUABLE")]
     [InlineData("P5_RULE", "P5_UNEVALUABLE")]
+    [InlineData("P6", "P6")]
     public void EachProofAloneBlocks(string proof, string failed)
     {
         Break(proof);
