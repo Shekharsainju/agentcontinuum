@@ -114,6 +114,26 @@ public sealed class SettingsScannerTests : IDisposable
         Assert.DoesNotContain("SENTINEL-p2", JsonSerializer.Serialize(result));
     }
 
+    [Theory]
+    [InlineData("CLAUDE_CODE_USE_FOUNDRY")]
+    [InlineData("claude_code_use_foundry")]
+    [InlineData("CLAUDE_CODE_USE_SOMETHING_NEW")]
+    public void Scan_AnyProviderSwitchInEnv_Fails(string name)
+    {
+        Write("project-local", $$$"""{"env":{"{{{name}}}":"1"}}""");
+
+        Assert.Equal([$"project-local: env.{name.ToUpperInvariant()}"], Scan().Problems);
+    }
+
+    [Fact]
+    public void Scan_ProviderSwitchAlsoListedInRules_ReportedOnce()
+    {
+        var rules = _rules with { P2ExtraKeys = ["env.CLAUDE_CODE_USE_FOUNDRY"] };
+        Write("user", """{"env":{"CLAUDE_CODE_USE_FOUNDRY":"1"}}""");
+
+        Assert.Equal(["user: env.CLAUDE_CODE_USE_FOUNDRY"], Scan(rules).Problems);
+    }
+
     [Fact]
     public void Scan_LockedFile_Fails()
     {
