@@ -11,7 +11,7 @@ public static class SettingsScanner
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
     ];
 
-    public static ProofResult Scan(string userProfile, string worktree, string? managedPath, ClaudeRules rules)
+    public static ProofResult Scan(string userProfile, string worktree, string? managedPath, ClaudeRules? rules)
     {
         var problems = new List<string>();
         foreach (var (scope, path) in Scopes(userProfile, worktree, managedPath))
@@ -54,7 +54,7 @@ public static class SettingsScanner
         }
     }
 
-    private static void CheckSettings(string scope, JsonElement root, ClaudeRules rules, List<string> problems)
+    private static void CheckSettings(string scope, JsonElement root, ClaudeRules? rules, List<string> problems)
     {
         if (root.TryGetProperty("apiKeyHelper", out _))
         {
@@ -70,7 +70,7 @@ public static class SettingsScanner
                 }
             }
         }
-        foreach (var key in rules.P2ExtraKeys)
+        foreach (var key in rules?.P2ExtraKeys ?? [])
         {
             if (HasPath(root, key))
             {
