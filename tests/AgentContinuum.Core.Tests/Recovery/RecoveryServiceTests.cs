@@ -188,17 +188,68 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.All(_tasks.List(), t => Assert.NotEqual(TaskState.Running, t.State));
     }
 
+    private void Sql(string sql)
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    [Fact]
+    public void MissingTaskRow_OpLeftLive_OtherOpsRecovered()
+    {
+        Sql("INSERT INTO launch_ops (op_id, task_id, window_id, attempt_no, state, created_utc) VALUES ('ghost-op', 'ghost', 0, 1, 'INTENT', 0)");
+        var spawned = _ledger.BeginIntent("t1");
+        _ledger.MarkSpawned(spawned, 100, 1, _task.SessionId);
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Intent, _ledger.Get("ghost-op")!.State);
+        Assert.Equal(OpState.Interrupted, _ledger.Get(spawned)!.State);
+    }
+
+    [Fact]
+    public void Exited_CorruptEventRow_Ambiguous()
+    {
+        var opId = ExitedOp(0);
+        Sql($"INSERT INTO events (op_id, kind, fields_json, at_utc) VALUES ('{opId}', 'stream', 'not json', 0)");
+
+        Service().Reconcile();
+
+        Assert.Equal(Outcome.Ambiguous, _ledger.Get(opId)!.Outcome);
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Stopped, reason unverified"), (task.State, task.AttentionReason));
+    }
+
+    [Fact]
+    public void ListerThrowsUnexpectedly_TreatedAsListFailure()
+    {
+        var intent = _ledger.BeginIntent("t1");
+        _lister.Unexpected = true;
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Intent, _ledger.Get(intent)!.State);
+        Assert.Equal("Process check failed", _tasks.Get("t1")!.AttentionReason);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
 
         public bool Fail { get; set; }
 
+        public bool Unexpected { get; set; }
+
         public int Calls { get; private set; }
 
         public IReadOnlyList<ProcessInfo> ListOwnProcesses()
         {
             Calls++;
+            if (Unexpected)
+            {
+                throw new UnauthorizedAccessException("access denied");
+            }
             return Fail ? throw new ProcessListException("enumeration failed") : Processes;
         }
     }
