@@ -92,21 +92,22 @@ function Remove-ProbeProfile {
   $profiles = @(Get-CimInstance -ClassName Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object {
       ($_.SID -and ($Sids -contains $_.SID)) -or ($_.LocalPath -like 'C:\Users\ac-probe-*')
     })
-  $failed = $false
+  $failures = @()
   foreach ($p in $profiles) {
     $loaded = ($p.PSObject.Properties['Loaded']) -and $p.Loaded
     $done = $false
+    $lastError = ''
     for ($i = 0; $i -lt 5; $i++) {
       try {
         if ($loaded -and $p.SID) { Dismount-ProbeProfileHive -Sid ([string]$p.SID) }
         Remove-ProbeProfileInstance -Profile $p
         $done = $true; break
       }
-      catch { Start-Sleep -Seconds 2 }
+      catch { $lastError = [string]$_.Exception.Message; Start-Sleep -Seconds 2 }
     }
-    if (-not $done) { $failed = $true }
+    if (-not $done) { $failures += "$($p.LocalPath): $lastError" }
   }
-  if ($failed) { throw 'one or more probe profiles could not be deleted' }
+  if ($failures.Count -gt 0) { throw "one or more probe profiles could not be deleted: $($failures -join '; ')" }
 }
 
 function Remove-ProbeAccount {
