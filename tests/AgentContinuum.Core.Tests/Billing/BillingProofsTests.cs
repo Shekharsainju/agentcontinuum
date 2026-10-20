@@ -271,6 +271,19 @@ public sealed class BillingProofsTests : IDisposable
         Assert.Equal(["P1"], Evaluate().FailedProofs);
     }
 
+    [Theory]
+    [InlineData("profile")]
+    [InlineData("C:profile")]
+    public void P1_RelativeProfile_Fails(string relative)
+    {
+        _childEnv["USERPROFILE"] = relative;
+
+        var verdict = new BillingProofs(_runner, _clock, _store)
+            .Evaluate(new BillingContext(_task, _rules, _childEnv, relative, [_dir.File("managed-settings.json")]));
+
+        Assert.Contains("P1", verdict.FailedProofs);
+    }
+
     [Fact]
     public void P1_ChildProfileDiffersOnlyInCaseOrTrailingSlash_Passes()
     {
