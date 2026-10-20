@@ -49,6 +49,11 @@ public sealed class BillingProofs
         {
             failed.Add("P4");
         }
+        // P5 itself is judged on the running stream; before launch the rule only has to exist.
+        if (ctx.Rules?.P5 is null)
+        {
+            failed.Add("P5_UNEVALUABLE");
+        }
         return new BillingVerdict(failed.Count == 0, failed);
     }
 
