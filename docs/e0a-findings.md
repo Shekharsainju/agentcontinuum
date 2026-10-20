@@ -64,7 +64,23 @@ Run 1 used the same build and gave the same results except:
 ## Open items from the runs
 
 - Run A timed out in Session 0. Its `results-A.json` holds only the timeout, so it does not show where Run A stopped.
-- Four `ac-probe-agent` processes were alive when Run B ended, including the C7 and C8 children. Teardown stopped them. Why they outlived the harness and its kill-on-close job is not yet explained.
+- Four probe processes were alive when Run B ended, including the C7 and C8 children. Teardown stopped them. The cause is below.
+
+## Containment caveat: C7 and C8 children outside the job
+
+The C7 and C8 children did not break out of a job. They were never in the harness's job.
+
+- C2 to C6 each create a kill-on-close job, start the child suspended, assign it, then resume it. C7 and C8 create no job. They start the child with `StartAsUser` and never call `AssignProcessToJobObject`. The third `Launch` argument they pass as `$false` is the suspend flag, not a job flag.
+- After writing its report, every `Child.ps1` mode falls through to a 120 second heartbeat loop. So both children were still running when their checks finished.
+- Each check's `finally` then calls `KillPid`, which reopens the child by PID with `PROCESS_ALL_ACCESS` and ignores the result. The same PIDs (19764 and 19832 in run 2, 14624 and 12792 in run 1) were still alive at the end of Run B, so the kill failed in both runs. The probe does not record the error. The likely reason is that `ac-probe-ctl` is not granted the full access mask on another account's process. C8 shows that pattern in the other direction: the terminate right was granted, VM write was denied.
+- With no job, nothing ties the children's lifetime to the harness. They outlived it and were still inside their heartbeat window when the stray list was taken.
+- The other two stray PIDs were not identified. The probe records only PIDs.
+
+C2 to C6 still show that a job holds agent processes when they are assigned before they run. The caveat for the real controller:
+
+- Start every agent process suspended and assign it to the controller's job before resuming it. Containment holds only for processes assigned this way.
+- Do not kill agent processes by reopening a PID. Keep the process handle that `CreateProcessWithLogonW` returns. If a reopen is unavoidable, request only `PROCESS_TERMINATE`.
+- Check every kill result and record failures.
 
 ## Mapping to "Blocked on"
 
