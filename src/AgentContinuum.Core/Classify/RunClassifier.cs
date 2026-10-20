@@ -28,8 +28,9 @@ public static class RunClassifier
             return new Classification(Outcome.UsageLimit, UsageLimitReason, ResetEpoch(rules, limitRule, limit, stream));
         }
 
-        // A hook only fires on a stop, so one the limit rule did not confirm is unverified, not a plain failure.
-        if (hooks.Count > 0)
+        // With no rules nothing about the run can be verified. A hook only fires on a stop, so one the limit rule
+        // did not confirm is unverified, not a plain failure.
+        if (rules is null || hooks.Count > 0)
         {
             return new Classification(Outcome.Ambiguous, AmbiguousReason, null);
         }
