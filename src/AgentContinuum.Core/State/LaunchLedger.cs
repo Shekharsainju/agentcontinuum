@@ -44,9 +44,16 @@ public sealed class LaunchLedger
             tx,
             """
             INSERT INTO launch_ops (op_id, task_id, window_id, attempt_no, state, created_utc)
-            VALUES ($op_id, $task_id, 0, $attempt_no, $state, $created_utc)
+            VALUES (
+                $op_id,
+                $task_id,
+                (SELECT count(*) FROM launch_ops WHERE task_id = $task_id AND outcome = $usage_limit),
+                $attempt_no,
+                $state,
+                $created_utc)
             """,
             ("$op_id", opId),
+            ("$usage_limit", StateText.ToText(Outcome.UsageLimit)),
             ("$task_id", taskId),
             ("$attempt_no", attemptsUsed + 1),
             ("$state", StateText.ToText(OpState.Intent)),
