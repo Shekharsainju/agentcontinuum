@@ -65,6 +65,20 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(1, task.AttemptsUsed);
     }
 
+    [Fact]
+    public void Spawned_Interrupted_NeedsAttention()
+    {
+        var opId = _ledger.BeginIntent("t1");
+        _ledger.MarkSpawned(opId, 100, 1, _task.SessionId);
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Interrupted, _ledger.Get(opId)!.State);
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, "Interrupted run"), (task.State, task.AttentionReason));
+        Assert.Equal(1, task.AttemptsUsed);
+    }
+
     private sealed class FakeLister : IProcessLister
     {
         public List<ProcessInfo> Processes { get; } = [];
