@@ -6,6 +6,12 @@ if (args is ["--version"])
     return 0;
 }
 
+if (args is ["--fake-child", var childSeconds])
+{
+    Thread.Sleep(TimeSpan.FromSeconds(int.Parse(childSeconds)));
+    return 0;
+}
+
 if (args is ["--fake-hook-sink", var sinkPath])
 {
     using var sink = File.Create(sinkPath);
@@ -40,6 +46,9 @@ using (var stdin = new MemoryStream())
     File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "fake-claude-args.json"), record.ToJsonString());
 }
 
+var lingerSeconds = scenario["lingerSeconds"]?.GetValue<int>() ?? 0;
+SpawnChildren(scenario["spawnChildren"]?.GetValue<int>() ?? 0, lingerSeconds);
+
 if (scenario["authSource"]?.GetValue<string>() is { } authSource)
 {
     Emit(new JsonObject { ["type"] = "system", ["subtype"] = "init", ["session_id"] = sessionId, ["apiKeySource"] = authSource });
@@ -59,9 +68,32 @@ if (scenario["hook"] is JsonObject hook && options.SettingsPath is { } settingsP
     RunHook(hook, settingsPath, sessionId);
 }
 
-Thread.Sleep(TimeSpan.FromSeconds(scenario["lingerSeconds"]?.GetValue<int>() ?? 0));
+Thread.Sleep(TimeSpan.FromSeconds(lingerSeconds));
 
 return scenario["exitCode"]?.GetValue<int>() ?? 0;
+
+// Children live as long as the parent lingers so tests of job teardown have something to kill.
+static void SpawnChildren(int count, int seconds)
+{
+    if (count <= 0)
+    {
+        return;
+    }
+    var pids = new JsonArray();
+    for (var i = 0; i < count; i++)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        info.ArgumentList.Add("--fake-child");
+        info.ArgumentList.Add(seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        using var child = System.Diagnostics.Process.Start(info)!;
+        pids.Add(child.Id);
+    }
+    File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "fake-claude-children.json"), pids.ToJsonString());
+}
 
 static void RunHook(JsonObject hook, string settingsPath, string sessionId)
 {
