@@ -1,0 +1,582 @@
+{
+    "schema":  "ac-probe-e1/1",
+    "captured_utc":  "2026-10-20T02:31:27.2244986Z",
+    "cli":  {
+                "path":  "C:\\Users\\ultra\\.local\\bin\\claude.exe",
+                "target":  null,
+                "is_exe":  true,
+                "sha256":  "019E5174D5D954585EDB1A946FE280E44A973050B4897034ADF0E16306F85FDD",
+                "version":  "2.1.304"
+            },
+    "data":  {
+                 "removed_shell_env":  [
+                                           "PSModulePath"
+                                       ],
+                 "stored_login":  {
+                                      "run":  {
+                                                  "events":  [
+                                                                 {
+                                                                     "seconds":  1.1,
+                                                                     "shape":  {
+                                                                                   "type":  "system",
+                                                                                   "subtype":  "hook_started",
+                                                                                   "hook_id":  {
+                                                                                                   "redacted":  true,
+                                                                                                   "length":  36
+                                                                                               },
+                                                                                   "hook_name":  "SessionStart:startup",
+                                                                                   "hook_event":  "SessionStart",
+                                                                                   "uuid":  "8d81defa-008a-47ff-9705-d35adc58562c",
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f"
+                                                                               }
+                                                                 },
+                                                                 {
+                                                                     "seconds":  1.2,
+                                                                     "shape":  {
+                                                                                   "type":  "system",
+                                                                                   "subtype":  "hook_response",
+                                                                                   "hook_id":  {
+                                                                                                   "redacted":  true,
+                                                                                                   "length":  36
+                                                                                               },
+                                                                                   "hook_name":  "SessionStart:startup",
+                                                                                   "hook_event":  "SessionStart",
+                                                                                   "output":  {
+                                                                                                  "redacted":  true,
+                                                                                                  "length":  3604
+                                                                                              },
+                                                                                   "stdout":  {
+                                                                                                  "redacted":  true,
+                                                                                                  "length":  3604
+                                                                                              },
+                                                                                   "stderr":  {
+                                                                                                  "redacted":  true,
+                                                                                                  "length":  0
+                                                                                              },
+                                                                                   "exit_code":  0,
+                                                                                   "outcome":  "success",
+                                                                                   "uuid":  "e29799ce-83e8-4889-b8fc-60139f17f820",
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f"
+                                                                               }
+                                                                 },
+                                                                 {
+                                                                     "seconds":  1.9,
+                                                                     "shape":  {
+                                                                                   "type":  "system",
+                                                                                   "subtype":  "init",
+                                                                                   "cwd":  {
+                                                                                               "redacted":  true,
+                                                                                               "length":  77
+                                                                                           },
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f",
+                                                                                   "tools[#]":  35,
+                                                                                   "tools[0]":  "Task",
+                                                                                   "mcp_servers[#]":  4,
+                                                                                   "mcp_servers[0].name":  {
+                                                                                                               "redacted":  true,
+                                                                                                               "length":  21
+                                                                                                           },
+                                                                                   "mcp_servers[0].status":  "connected",
+                                                                                   "mcp_servers[0].source":  "claudeai",
+                                                                                   "model":  "claude-opus-5-5",
+                                                                                   "permissionMode":  "auto",
+                                                                                   "slash_commands[#]":  77,
+                                                                                   "slash_commands[0]":  "superpowers:brainstorming",
+                                                                                   "terminal_slash_commands[#]":  4,
+                                                                                   "terminal_slash_commands[0]":  "doctor",
+                                                                                   "apiKeySource":  "none",
+                                                                                   "claude_code_version":  "2.1.304",
+                                                                                   "output_style":  "default",
+                                                                                   "agents[#]":  5,
+                                                                                   "agents[0]":  "claude",
+                                                                                   "skills[#]":  41,
+                                                                                   "skills[0]":  "superpowers:brainstorming",
+                                                                                   "plugins[#]":  4,
+                                                                                   "plugins[0].name":  "superpowers",
+                                                                                   "plugins[0].path":  {
+                                                                                                           "redacted":  true,
+                                                                                                           "length":  78
+                                                                                                       },
+                                                                                   "plugins[0].source":  {
+                                                                                                             "redacted":  true,
+                                                                                                             "length":  35
+                                                                                                         },
+                                                                                   "plugins[0].version":  "7.0.0",
+                                                                                   "capabilities[#]":  11,
+                                                                                   "capabilities[0]":  "interrupt_receipt_v1",
+                                                                                   "analytics_disabled":  false,
+                                                                                   "product_feedback_disabled":  false,
+                                                                                   "uuid":  "edf14dfe-f8d7-4d65-a149-cdc97c286b39",
+                                                                                   "memory_paths.auto":  {
+                                                                                                             "redacted":  true,
+                                                                                                             "length":  117
+                                                                                                         },
+                                                                                   "original_cwd":  {
+                                                                                                        "redacted":  true,
+                                                                                                        "length":  77
+                                                                                                    },
+                                                                                   "additional_directories[#]":  0,
+                                                                                   "messaging_socket_path":  {
+                                                                                                                 "redacted":  true,
+                                                                                                                 "length":  54
+                                                                                                             },
+                                                                                   "fast_mode_state":  "off",
+                                                                                   "fast_mode_disabled_reason":  "sdk_opt_in_required",
+                                                                                   "per_turn_effort_active":  true,
+                                                                                   "view_mode":  "default",
+                                                                                   "powershell_path":  {
+                                                                                                           "redacted":  true,
+                                                                                                           "length":  59
+                                                                                                       }
+                                                                               }
+                                                                 },
+                                                                 {
+                                                                     "seconds":  3.6,
+                                                                     "shape":  {
+                                                                                   "type":  "assistant",
+                                                                                   "message.model":  "claude-opus-5-5",
+                                                                                   "message.id":  "msg_011CgChnzdFbxKZpV25jrW9G",
+                                                                                   "message.type":  "message",
+                                                                                   "message.role":  "assistant",
+                                                                                   "message.content[#]":  1,
+                                                                                   "message.content[0].type":  "text",
+                                                                                   "message.content[0].text":  "OK",
+                                                                                   "message.container":  null,
+                                                                                   "message.stop_reason":  null,
+                                                                                   "message.stop_sequence":  null,
+                                                                                   "message.stop_details":  null,
+                                                                                   "message.usage.input_tokens":  2,
+                                                                                   "message.usage.cache_creation_input_tokens":  11843,
+                                                                                   "message.usage.cache_read_input_tokens":  13912,
+                                                                                   "message.usage.cache_creation.ephemeral_5m_input_tokens":  0,
+                                                                                   "message.usage.cache_creation.ephemeral_1h_input_tokens":  11843,
+                                                                                   "message.usage.output_tokens":  4,
+                                                                                   "message.usage.service_tier":  "standard",
+                                                                                   "message.usage.inference_geo":  "global",
+                                                                                   "message.usage.speed":  "standard",
+                                                                                   "message.input_transformations[#]":  0,
+                                                                                   "message.diagnostics":  null,
+                                                                                   "message.context_management":  null,
+                                                                                   "parent_tool_use_id":  null,
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f",
+                                                                                   "uuid":  "b6333db3-f882-4e6d-8dcc-2545bff418e7",
+                                                                                   "timestamp":  "2026-10-20T02:31:23.378Z",
+                                                                                   "request_id":  "req_011CgChnzCx5iJptVoK3Gxvd"
+                                                                               }
+                                                                 },
+                                                                 {
+                                                                     "seconds":  3.6,
+                                                                     "shape":  {
+                                                                                   "type":  "rate_limit_event",
+                                                                                   "rate_limit_info.status":  "allowed",
+                                                                                   "rate_limit_info.resetsAt":  1792475400,
+                                                                                   "rate_limit_info.rateLimitType":  "five_hour",
+                                                                                   "rate_limit_info.overageStatus":  "rejected",
+                                                                                   "rate_limit_info.overageDisabledReason":  "org_level_disabled",
+                                                                                   "rate_limit_info.isUsingOverage":  false,
+                                                                                   "rate_limit_info.unifiedWindows.five_hour.utilization":  0.35,
+                                                                                   "rate_limit_info.unifiedWindows.five_hour.resetsAt":  1792475400,
+                                                                                   "rate_limit_info.unifiedWindows.seven_day.utilization":  0.68,
+                                                                                   "rate_limit_info.unifiedWindows.seven_day.resetsAt":  1792479600,
+                                                                                   "uuid":  "b5255f04-1ad3-4657-8cd8-c944de3d34ab",
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f"
+                                                                               }
+                                                                 },
+                                                                 {
+                                                                     "seconds":  3.7,
+                                                                     "shape":  {
+                                                                                   "duration_api_ms":  1724,
+                                                                                   "stop_reason":  "end_turn",
+                                                                                   "session_id":  "9704e6d4-d947-4c1a-8224-b751c4def13f",
+                                                                                   "total_cost_usd":  0.09761439999999999,
+                                                                                   "usage.input_tokens":  2,
+                                                                                   "usage.cache_creation_input_tokens":  11843,
+                                                                                   "usage.cache_read_input_tokens":  13912,
+                                                                                   "usage.output_tokens":  4,
+                                                                                   "usage.output_tokens_details.thinking_tokens":  0,
+                                                                                   "usage.server_tool_use.web_search_requests":  0,
+                                                                                   "usage.server_tool_use.web_fetch_requests":  0,
+                                                                                   "usage.service_tier":  "standard",
+                                                                                   "usage.cache_creation.ephemeral_1h_input_tokens":  11843,
+                                                                                   "usage.cache_creation.ephemeral_5m_input_tokens":  0,
+                                                                                   "usage.inference_geo":  "global",
+                                                                                   "usage.iterations[#]":  1,
+                                                                                   "usage.iterations[0].input_tokens":  2,
+                                                                                   "usage.iterations[0].output_tokens":  4,
+                                                                                   "usage.iterations[0].cache_read_input_tokens":  13912,
+                                                                                   "usage.iterations[0].cache_creation_input_tokens":  11843,
+                                                                                   "usage.iterations[0].cache_creation.ephemeral_5m_input_tokens":  0,
+                                                                                   "usage.iterations[0].cache_creation.ephemeral_1h_input_tokens":  11843,
+                                                                                   "usage.iterations[0].type":  "message",
+                                                                                   "usage.speed":  "standard",
+                                                                                   "usage.fallback_credit":  null,
+                                                                                   "modelUsage.claude-opus-5-5.inputTokens":  2,
+                                                                                   "modelUsage.claude-opus-5-5.outputTokens":  4,
+                                                                                   "modelUsage.claude-opus-5-5.cacheReadInputTokens":  13912,
+                                                                                   "modelUsage.claude-opus-5-5.cacheCreationInputTokens":  11843,
+                                                                                   "modelUsage.claude-opus-5-5.webSearchRequests":  0,
+                                                                                   "modelUsage.claude-opus-5-5.costUSD":  0.09761439999999999,
+                                                                                   "modelUsage.claude-opus-5-5.contextWindow":  1000000,
+                                                                                   "modelUsage.claude-opus-5-5.maxOutputTokens":  128000,
+                                                                                   "modelUsage.claude-opus-5-5.thinkingTokens":  0,
+                                                                                   "modelUsage.claude-opus-5-5.canonicalModel":  "claude-opus-5-5",
+                                                                                   "modelUsage.claude-opus-5-5.provider":  "firstParty",
+                                                                                   "modelUsage.claude-opus-5-5.costBasis":  "list",
+                                                                                   "permission_denials[#]":  0,
+                                                                                   "terminal_reason":  "completed",
+                                                                                   "fast_mode_state":  "off",
+                                                                                   "fast_mode_disabled_reason":  "sdk_opt_in_required",
+                                                                                   "subagent_stats.spawned":  0,
+                                                                                   "subagent_stats.requested.background":  0,
+                                                                                   "subagent_stats.requested.foreground":  0,
+                                                                                   "subagent_stats.requested.unset":  0,
+                                                                                   "subagent_stats.started_in_background":  0,
+                                                                                   "subagent_stats.max_depth":  0,
+                                                                                   "subagent_stats.spawned_by_subagents":  0,
+                                                                                   "subagent_stats.completed":  0,
+                                                                                   "subagent_stats.failed":  0,
+                                                                                   "subagent_stats.killed.parent":  0,
+                                                                                   "subagent_stats.killed.user":  0,
+                                                                                   "subagent_stats.killed.system":  0,
+                                                                                   "subagent_stats.refused.depth_limit":  0,
+                                                                                   "subagent_stats.refused.concurrency_limit":  0,
+                                                                                   "subagent_stats.refused.budget":  0,
+                                                                                   "safety_stops":  0,
+                                                                                   "is_error":  false,
+                                                                                   "num_turns":  1,
+                                                                                   "subtype":  "success",
+                                                                                   "api_error_status":  null,
+                                                                                   "result":  "OK",
+                                                                                   "ttft_ms":  1849,
+                                                                                   "type":  "result",
+                                                                                   "duration_ms":  1867,
+                                                                                   "uuid":  "34785b8c-ec65-4fa3-bb7b-c0ff9ca7eca1",
+                                                                                   "ttft_stream_ms":  1848,
+                                                                                   "time_to_request_ms":  144,
+                                                                                   "first_content_frame_ms":  1848,
+                                                                                   "queued_turn_count":  0,
+                                                                                   "result_index":  0
+                                                                               }
+                                                                 }
+                                                             ],
+                                                  "final_seen":  true,
+                                                  "exit_code":  0,
+                                                  "exited_by_itself":  true,
+                                                  "killed_reason":  null,
+                                                  "seconds_final_to_exit":  0.8,
+                                                  "timed_out":  false,
+                                                  "stderr":  {
+                                                                 "length":  0,
+                                                                 "lines":  0,
+                                                                 "categories":  [
+
+                                                                                ]
+                                                             }
+                                              },
+                                      "auth_status":  {
+                                                          "exit_code":  0,
+                                                          "timed_out":  false,
+                                                          "stdout":  {
+                                                                         "loggedIn":  true,
+                                                                         "authMethod":  "claude.ai",
+                                                                         "apiProvider":  "firstParty",
+                                                                         "analyticsDisabled":  false,
+                                                                         "projectsDirectory":  {
+                                                                                                   "redacted":  true,
+                                                                                                   "length":  31
+                                                                                               },
+                                                                         "configDirectory":  {
+                                                                                                 "redacted":  true,
+                                                                                                 "length":  22
+                                                                                             },
+                                                                         "email":  {
+                                                                                       "redacted":  true,
+                                                                                       "length":  23
+                                                                                   },
+                                                                         "orgId":  {
+                                                                                       "redacted":  true,
+                                                                                       "length":  36
+                                                                                   },
+                                                                         "orgName":  {
+                                                                                         "redacted":  true,
+                                                                                         "length":  38
+                                                                                     },
+                                                                         "subscriptionType":  "pro"
+                                                                     },
+                                                          "stderr":  {
+                                                                         "length":  0,
+                                                                         "lines":  0,
+                                                                         "categories":  [
+
+                                                                                        ]
+                                                                     }
+                                                      }
+                                  },
+                 "invalid_api_key":  {
+                                         "run":  {
+                                                     "events":  [
+                                                                    {
+                                                                        "seconds":  0.8,
+                                                                        "shape":  {
+                                                                                      "type":  "system",
+                                                                                      "subtype":  "hook_started",
+                                                                                      "hook_id":  {
+                                                                                                      "redacted":  true,
+                                                                                                      "length":  36
+                                                                                                  },
+                                                                                      "hook_name":  "SessionStart:startup",
+                                                                                      "hook_event":  "SessionStart",
+                                                                                      "uuid":  "4f1a91a4-e3e8-41cd-bf02-c0ab04c63785",
+                                                                                      "session_id":  "3f4af9f3-df1d-4cfe-b3ba-0ae59df22d4b"
+                                                                                  }
+                                                                    },
+                                                                    {
+                                                                        "seconds":  1,
+                                                                        "shape":  {
+                                                                                      "type":  "system",
+                                                                                      "subtype":  "hook_response",
+                                                                                      "hook_id":  {
+                                                                                                      "redacted":  true,
+                                                                                                      "length":  36
+                                                                                                  },
+                                                                                      "hook_name":  "SessionStart:startup",
+                                                                                      "hook_event":  "SessionStart",
+                                                                                      "output":  {
+                                                                                                     "redacted":  true,
+                                                                                                     "length":  3604
+                                                                                                 },
+                                                                                      "stdout":  {
+                                                                                                     "redacted":  true,
+                                                                                                     "length":  3604
+                                                                                                 },
+                                                                                      "stderr":  {
+                                                                                                     "redacted":  true,
+                                                                                                     "length":  0
+                                                                                                 },
+                                                                                      "exit_code":  0,
+                                                                                      "outcome":  "success",
+                                                                                      "uuid":  "ee83273a-334b-429e-a000-332151e6c96d",
+                                                                                      "session_id":  "3f4af9f3-df1d-4cfe-b3ba-0ae59df22d4b"
+                                                                                  }
+                                                                    },
+                                                                    {
+                                                                        "seconds":  1,
+                                                                        "shape":  {
+                                                                                      "type":  "system",
+                                                                                      "subtype":  "init",
+                                                                                      "cwd":  {
+                                                                                                  "redacted":  true,
+                                                                                                  "length":  77
+                                                                                              },
+                                                                                      "session_id":  "3f4af9f3-df1d-4cfe-b3ba-0ae59df22d4b",
+                                                                                      "tools[#]":  27,
+                                                                                      "tools[0]":  "Task",
+                                                                                      "mcp_servers[#]":  0,
+                                                                                      "model":  "claude-opus-5-5",
+                                                                                      "permissionMode":  "auto",
+                                                                                      "slash_commands[#]":  73,
+                                                                                      "slash_commands[0]":  "deep-research",
+                                                                                      "terminal_slash_commands[#]":  4,
+                                                                                      "terminal_slash_commands[0]":  "doctor",
+                                                                                      "apiKeySource":  "ANTHROPIC_API_KEY",
+                                                                                      "claude_code_version":  "2.1.304",
+                                                                                      "output_style":  "default",
+                                                                                      "agents[#]":  5,
+                                                                                      "agents[0]":  "claude",
+                                                                                      "skills[#]":  42,
+                                                                                      "skills[0]":  "deep-research",
+                                                                                      "plugins[#]":  4,
+                                                                                      "plugins[0].name":  "superpowers",
+                                                                                      "plugins[0].path":  {
+                                                                                                              "redacted":  true,
+                                                                                                              "length":  78
+                                                                                                          },
+                                                                                      "plugins[0].source":  {
+                                                                                                                "redacted":  true,
+                                                                                                                "length":  35
+                                                                                                            },
+                                                                                      "plugins[0].version":  "7.0.0",
+                                                                                      "capabilities[#]":  11,
+                                                                                      "capabilities[0]":  "interrupt_receipt_v1",
+                                                                                      "analytics_disabled":  false,
+                                                                                      "product_feedback_disabled":  true,
+                                                                                      "uuid":  "f62b3cb3-c1f4-4dc2-abfd-cb6b9c5b9eea",
+                                                                                      "memory_paths.auto":  {
+                                                                                                                "redacted":  true,
+                                                                                                                "length":  117
+                                                                                                            },
+                                                                                      "messaging_socket_path":  {
+                                                                                                                    "redacted":  true,
+                                                                                                                    "length":  54
+                                                                                                                },
+                                                                                      "fast_mode_state":  "off",
+                                                                                      "fast_mode_disabled_reason":  "sdk_opt_in_required",
+                                                                                      "per_turn_effort_active":  true,
+                                                                                      "view_mode":  "default",
+                                                                                      "powershell_path":  {
+                                                                                                              "redacted":  true,
+                                                                                                              "length":  59
+                                                                                                          }
+                                                                                  }
+                                                                    },
+                                                                    {
+                                                                        "seconds":  1.3,
+                                                                        "shape":  {
+                                                                                      "type":  "assistant",
+                                                                                      "message.diagnostics":  null,
+                                                                                      "message.id":  {
+                                                                                                         "redacted":  true,
+                                                                                                         "length":  36
+                                                                                                     },
+                                                                                      "message.container":  null,
+                                                                                      "message.model":  {
+                                                                                                            "redacted":  true,
+                                                                                                            "length":  11
+                                                                                                        },
+                                                                                      "message.role":  "assistant",
+                                                                                      "message.stop_details":  null,
+                                                                                      "message.stop_reason":  "stop_sequence",
+                                                                                      "message.stop_sequence":  {
+                                                                                                                    "redacted":  true,
+                                                                                                                    "length":  0
+                                                                                                                },
+                                                                                      "message.type":  "message",
+                                                                                      "message.usage.output_tokens_details":  null,
+                                                                                      "message.usage.input_tokens":  0,
+                                                                                      "message.usage.output_tokens":  0,
+                                                                                      "message.usage.cache_creation_input_tokens":  0,
+                                                                                      "message.usage.cache_read_input_tokens":  0,
+                                                                                      "message.usage.server_tool_use.web_search_requests":  0,
+                                                                                      "message.usage.server_tool_use.web_fetch_requests":  0,
+                                                                                      "message.usage.service_tier":  null,
+                                                                                      "message.usage.cache_creation.ephemeral_1h_input_tokens":  0,
+                                                                                      "message.usage.cache_creation.ephemeral_5m_input_tokens":  0,
+                                                                                      "message.usage.inference_geo":  null,
+                                                                                      "message.usage.iterations":  null,
+                                                                                      "message.usage.speed":  null,
+                                                                                      "message.usage.fallback_credit":  null,
+                                                                                      "message.content[#]":  1,
+                                                                                      "message.content[0].type":  "text",
+                                                                                      "message.content[0].text":  {
+                                                                                                                      "redacted":  true,
+                                                                                                                      "length":  38
+                                                                                                                  },
+                                                                                      "message.context_management":  null,
+                                                                                      "parent_tool_use_id":  null,
+                                                                                      "session_id":  "3f4af9f3-df1d-4cfe-b3ba-0ae59df22d4b",
+                                                                                      "uuid":  "40284e85-5388-4c99-8b3b-2ea0e5db4734",
+                                                                                      "timestamp":  "2026-10-20T02:31:25.910Z",
+                                                                                      "error":  "authentication_failed",
+                                                                                      "request_id":  "req_011CgChoH6DDMZ5Zy58PcYEb",
+                                                                                      "is_api_error_message":  true,
+                                                                                      "api_error_status":  401,
+                                                                                      "api_error_origin":  "first_party"
+                                                                                  }
+                                                                    },
+                                                                    {
+                                                                        "seconds":  1.4,
+                                                                        "shape":  {
+                                                                                      "duration_api_ms":  0,
+                                                                                      "stop_reason":  "stop_sequence",
+                                                                                      "session_id":  "3f4af9f3-df1d-4cfe-b3ba-0ae59df22d4b",
+                                                                                      "total_cost_usd":  0,
+                                                                                      "usage.output_tokens_details.thinking_tokens":  0,
+                                                                                      "usage.input_tokens":  0,
+                                                                                      "usage.cache_creation_input_tokens":  0,
+                                                                                      "usage.cache_read_input_tokens":  0,
+                                                                                      "usage.output_tokens":  0,
+                                                                                      "usage.server_tool_use.web_search_requests":  0,
+                                                                                      "usage.server_tool_use.web_fetch_requests":  0,
+                                                                                      "usage.service_tier":  "standard",
+                                                                                      "usage.cache_creation.ephemeral_1h_input_tokens":  0,
+                                                                                      "usage.cache_creation.ephemeral_5m_input_tokens":  0,
+                                                                                      "usage.inference_geo":  {
+                                                                                                                  "redacted":  true,
+                                                                                                                  "length":  0
+                                                                                                              },
+                                                                                      "usage.iterations[#]":  0,
+                                                                                      "usage.speed":  "standard",
+                                                                                      "usage.fallback_credit":  null,
+                                                                                      "permission_denials[#]":  0,
+                                                                                      "terminal_reason":  "api_error",
+                                                                                      "fast_mode_state":  "off",
+                                                                                      "fast_mode_disabled_reason":  "sdk_opt_in_required",
+                                                                                      "subagent_stats.spawned":  0,
+                                                                                      "subagent_stats.requested.background":  0,
+                                                                                      "subagent_stats.requested.foreground":  0,
+                                                                                      "subagent_stats.requested.unset":  0,
+                                                                                      "subagent_stats.started_in_background":  0,
+                                                                                      "subagent_stats.max_depth":  0,
+                                                                                      "subagent_stats.spawned_by_subagents":  0,
+                                                                                      "subagent_stats.completed":  0,
+                                                                                      "subagent_stats.failed":  0,
+                                                                                      "subagent_stats.killed.parent":  0,
+                                                                                      "subagent_stats.killed.user":  0,
+                                                                                      "subagent_stats.killed.system":  0,
+                                                                                      "subagent_stats.refused.depth_limit":  0,
+                                                                                      "subagent_stats.refused.concurrency_limit":  0,
+                                                                                      "subagent_stats.refused.budget":  0,
+                                                                                      "safety_stops":  0,
+                                                                                      "is_error":  true,
+                                                                                      "num_turns":  1,
+                                                                                      "subtype":  "success",
+                                                                                      "api_error_status":  401,
+                                                                                      "api_error_origin":  "first_party",
+                                                                                      "result":  {
+                                                                                                     "redacted":  true,
+                                                                                                     "length":  38
+                                                                                                 },
+                                                                                      "type":  "result",
+                                                                                      "duration_ms":  360,
+                                                                                      "uuid":  "d098f53c-6797-4c9d-a09e-1f9701f9bd6e",
+                                                                                      "queued_turn_count":  0,
+                                                                                      "result_index":  0
+                                                                                  }
+                                                                    }
+                                                                ],
+                                                     "final_seen":  true,
+                                                     "exit_code":  1,
+                                                     "exited_by_itself":  true,
+                                                     "killed_reason":  null,
+                                                     "seconds_final_to_exit":  1.1,
+                                                     "timed_out":  false,
+                                                     "stderr":  {
+                                                                    "length":  189,
+                                                                    "lines":  1,
+                                                                    "categories":  [
+                                                                                       "claude.ai",
+                                                                                       "api_key",
+                                                                                       "organization",
+                                                                                       "login"
+                                                                                   ]
+                                                                }
+                                                 },
+                                         "auth_status":  {
+                                                             "exit_code":  0,
+                                                             "timed_out":  false,
+                                                             "stdout":  {
+                                                                            "loggedIn":  true,
+                                                                            "authMethod":  "api_key",
+                                                                            "apiProvider":  "firstParty",
+                                                                            "analyticsDisabled":  false,
+                                                                            "projectsDirectory":  {
+                                                                                                      "redacted":  true,
+                                                                                                      "length":  31
+                                                                                                  },
+                                                                            "configDirectory":  {
+                                                                                                    "redacted":  true,
+                                                                                                    "length":  22
+                                                                                                },
+                                                                            "apiKeySource":  "ANTHROPIC_API_KEY"
+                                                                        },
+                                                             "stderr":  {
+                                                                            "length":  0,
+                                                                            "lines":  0,
+                                                                            "categories":  [
+
+                                                                                           ]
+                                                                        }
+                                                         }
+                                     }
+             }
+}
