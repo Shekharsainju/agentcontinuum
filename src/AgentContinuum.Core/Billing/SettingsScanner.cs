@@ -11,10 +11,22 @@ public static class SettingsScanner
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
     ];
 
-    public static ProofResult Scan(string userProfile, string worktree, string? managedPath, ClaudeRules? rules)
+    /// <summary>Both locations Claude Code has used for managed settings on Windows; which one 2.1.304 reads is unverified.</summary>
+    public static IReadOnlyList<string> DefaultManagedPaths() =>
+    [
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ClaudeCode", "managed-settings.json"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ClaudeCode", "managed-settings.json"),
+    ];
+
+    public static ProofResult Scan(string userProfile, string worktree, IReadOnlyList<string> managedPaths, ClaudeRules? rules)
     {
         var problems = new List<string>();
-        foreach (var (scope, path) in Scopes(userProfile, worktree, managedPath))
+        // With no managed path the managed scope would go unscanned, which must not read as a pass.
+        if (managedPaths.Count == 0)
+        {
+            problems.Add("managed: no path");
+        }
+        foreach (var (scope, path) in Scopes(userProfile, worktree, managedPaths))
         {
             if (!File.Exists(path) && !Directory.Exists(path))
             {
@@ -75,9 +87,9 @@ public static class SettingsScanner
         && env.ValueKind == JsonValueKind.Object
         && env.EnumerateObject().Any(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, string? managedPath)
+    private static IEnumerable<(string Scope, string Path)> Scopes(string userProfile, string worktree, IReadOnlyList<string> managedPaths)
     {
-        if (managedPath is not null)
+        foreach (var managedPath in managedPaths)
         {
             yield return ("managed", managedPath);
         }

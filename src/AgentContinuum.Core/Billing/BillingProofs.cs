@@ -30,7 +30,7 @@ public sealed class BillingProofs
         {
             failed.Add("P1");
         }
-        if (!SettingsScanner.Scan(ctx.UserProfile, ctx.Task.Worktree, ctx.ManagedSettingsPath, ctx.Rules).Pass)
+        if (!SettingsScanner.Scan(ctx.UserProfile, ctx.Task.Worktree, ctx.ManagedSettingsPaths, ctx.Rules).Pass)
         {
             failed.Add("P2");
         }

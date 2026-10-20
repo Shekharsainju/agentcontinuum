@@ -8,7 +8,7 @@ public sealed record BillingContext(
     ClaudeRules? Rules,
     IReadOnlyDictionary<string, string> ChildEnv,
     string UserProfile,
-    string? ManagedSettingsPath);
+    IReadOnlyList<string> ManagedSettingsPaths);
 
 /// <summary><see cref="FailedProofs"/> holds proof IDs such as P2 or P4_UNEVALUABLE, never values.</summary>
 public sealed record BillingVerdict(bool Verified, IReadOnlyList<string> FailedProofs);
