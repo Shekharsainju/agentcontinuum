@@ -46,7 +46,9 @@ public static class SettingsScanner
         {
             foreach (var variable in env.EnumerateObject())
             {
-                if (BillingVariables.Contains(variable.Name, StringComparer.OrdinalIgnoreCase))
+                // Claude Code adds providers as CLAUDE_CODE_USE_<name>; an unknown one is still a route off the subscription.
+                if (BillingVariables.Contains(variable.Name, StringComparer.OrdinalIgnoreCase)
+                    || variable.Name.StartsWith(ProviderSwitchPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     problems.Add($"{scope}: env.{variable.Name.ToUpperInvariant()}");
                 }
@@ -54,14 +56,18 @@ public static class SettingsScanner
         }
         foreach (var key in rules?.P2ExtraKeys ?? [])
         {
-            if (key.StartsWith(EnvPrefix, StringComparison.Ordinal) ? HasEnvName(root, key[EnvPrefix.Length..]) : JsonPaths.Has(root, key))
+            var problem = $"{scope}: {key}";
+            if (!problems.Contains(problem)
+                && (key.StartsWith(EnvPrefix, StringComparison.Ordinal) ? HasEnvName(root, key[EnvPrefix.Length..]) : JsonPaths.Has(root, key)))
             {
-                problems.Add($"{scope}: {key}");
+                problems.Add(problem);
             }
         }
     }
 
     private const string EnvPrefix = "env.";
+
+    private const string ProviderSwitchPrefix = "CLAUDE_CODE_USE_";
 
     // Windows environment names are case-insensitive, so Claude Code honours an env entry in any case.
     private static bool HasEnvName(JsonElement root, string name) =>

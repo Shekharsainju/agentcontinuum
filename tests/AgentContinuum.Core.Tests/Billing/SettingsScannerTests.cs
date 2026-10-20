@@ -93,13 +93,13 @@ public sealed class SettingsScannerTests : IDisposable
     [Fact]
     public void Scan_RuleExtraKeys_Fail()
     {
-        var rules = _rules with { P2ExtraKeys = ["awsAuthRefresh", "provider.baseUrl", "env.CLAUDE_CODE_USE_FOUNDRY"] };
-        Write("user", """{"awsAuthRefresh":"x","provider":{"baseUrl":"y","name":"z"},"env":{"CLAUDE_CODE_USE_FOUNDRY":"1"}}""");
+        var rules = _rules with { P2ExtraKeys = ["awsAuthRefresh", "provider.baseUrl", "env.AWS_BEARER_TOKEN_BEDROCK"] };
+        Write("user", """{"awsAuthRefresh":"x","provider":{"baseUrl":"y","name":"z"},"env":{"AWS_BEARER_TOKEN_BEDROCK":"1"}}""");
         Write("project", """{"provider":{"name":"z"},"awsAuthRefreshExtra":"x"}""");
 
         var result = Scan(rules);
 
-        Assert.Equal(["user: awsAuthRefresh", "user: provider.baseUrl", "user: env.CLAUDE_CODE_USE_FOUNDRY"], result.Problems);
+        Assert.Equal(["user: awsAuthRefresh", "user: provider.baseUrl", "user: env.AWS_BEARER_TOKEN_BEDROCK"], result.Problems);
     }
 
     [Fact]
