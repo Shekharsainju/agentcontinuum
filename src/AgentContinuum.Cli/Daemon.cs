@@ -67,16 +67,24 @@ public sealed class Daemon : IDisposable
             return AlreadyRunning;
         }
         _services.Out.WriteLine("daemon running");
+        // The loop supervises every running launch, so no single failure may end it.
         var sinceTick = System.Diagnostics.Stopwatch.StartNew();
-        Tick();
+        Guarded("tick", Tick);
         try
         {
             while (!stop.IsCancellationRequested)
             {
-                await ProcessRequests().ConfigureAwait(false);
+                try
+                {
+                    await ProcessRequests().ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    _services.Log.Write($"requests failed: {e.GetType().Name}");
+                }
                 if (sinceTick.Elapsed >= _services.TickInterval)
                 {
-                    Tick();
+                    Guarded("tick", Tick);
                     sinceTick.Restart();
                 }
                 await Task.Delay(_services.RequestPoll, stop).ConfigureAwait(false);
@@ -113,7 +121,20 @@ public sealed class Daemon : IDisposable
         foreach (var offer in _scheduler.Tick())
         {
             _services.Log.Write($"offer task {offer.TaskId}");
-            _services.Notifier.OfferResume(offer);
+            // The task is already RESUME_OFFERED, so a toast that fails still leaves ac status and ac resume.
+            Guarded($"offer for task {offer.TaskId}", () => _services.Notifier.OfferResume(offer), "not shown");
+        }
+    }
+
+    private void Guarded(string what, Action action, string failed = "failed")
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            _services.Log.Write($"{what} {failed}: {e.GetType().Name}");
         }
     }
 
