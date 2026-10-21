@@ -207,7 +207,7 @@ public sealed class LaunchCoordinator
                 ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
                 : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
             var run = _host.Start(
-                new LaunchSpec(task.CliPath, Args(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
+                new LaunchSpec(task.CliPath, BuildArgs(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
             return (run, stdin);
         }
         catch (Exception e)
@@ -231,7 +231,8 @@ public sealed class LaunchCoordinator
         return path;
     }
 
-    private static string[] Args(TaskRecord task, LaunchKind kind, string? settingsPath)
+    /// <summary>The CLI arguments for a launch; the prompt goes on stdin.</summary>
+    public static string[] BuildArgs(TaskRecord task, LaunchKind kind, string? settingsPath)
     {
         List<string> args =
         [
