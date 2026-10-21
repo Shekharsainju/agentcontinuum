@@ -205,6 +205,41 @@ public sealed class PreflightRunnerTests : IDisposable
         Assert.Equal(reason is null ? [] : [reason], Run().Reasons);
     }
 
+    private static void AssertCliChanged(PreflightResult result)
+    {
+        var reason = Assert.Single(result.Reasons);
+        Assert.StartsWith("CLI_CHANGED: ", reason);
+        Assert.Contains("ac pin-cli", reason);
+    }
+
+    [Fact]
+    public void Preflight_CliHashChanged_CliChanged()
+    {
+        _f.Task = _f.Task with { CliSha256 = new string('b', 64) };
+
+        AssertCliChanged(Run());
+    }
+
+    [Theory]
+    [InlineData(0, "2.1.305 (Claude Code)", false)]
+    [InlineData(0, "", false)]
+    [InlineData(1, "2.1.304 (Claude Code)", false)]
+    [InlineData(-1, "2.1.304 (Claude Code)", true)]
+    public void Preflight_CliVersionNotPinned_CliChanged(int exitCode, string stdout, bool timedOut)
+    {
+        _f.Runner.Version = new CommandResult(exitCode, stdout, timedOut);
+
+        AssertCliChanged(Run());
+    }
+
+    [Fact]
+    public void Preflight_CliMissing_CliChanged()
+    {
+        _f.Task = _f.Task with { CliPath = _f.Outside("claude.exe") };
+
+        AssertCliChanged(Run());
+    }
+
     [Fact]
     public void Preflight_UnknownTask_AdmissionState()
     {
