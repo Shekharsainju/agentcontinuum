@@ -1,3 +1,5 @@
+using System.Globalization;
+using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.State;
 using AgentContinuum.Core.Workspace;
@@ -55,6 +57,17 @@ public static class LocalCommands
         tasks.SetBaseline(taskId, hash);
         services.Log.Write($"accepted workspace for task {taskId}");
         services.Out.WriteLine("baseline taken");
+        return 0;
+    }
+
+    public static int AttestOverageOff(AppServices services)
+    {
+        var now = services.Clock.UtcNow;
+        using var store = services.OpenStore();
+        new Attestations(store).Record(Attestations.OverageOff, now);
+        services.Log.Write("attested overage off");
+        var until = (now + BillingProofs.AttestationMaxAge).UtcDateTime;
+        services.Out.WriteLine($"overage off attested, valid until {until.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC");
         return 0;
     }
 

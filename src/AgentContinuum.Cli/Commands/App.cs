@@ -16,6 +16,8 @@ public static class App
                 return LocalCommands.PinCli(services, taskId, pinArgs);
             case ["accept-workspace", var taskId]:
                 return LocalCommands.AcceptWorkspace(services, taskId);
+            case ["attest-overage-off"]:
+                return LocalCommands.AttestOverageOff(services);
             case ["status"]:
                 return StatusCommand.Run(services);
             case ["task", "start", var taskId]:
