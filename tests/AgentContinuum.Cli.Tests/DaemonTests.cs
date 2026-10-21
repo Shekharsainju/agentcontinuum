@@ -1,4 +1,6 @@
 using AgentContinuum.Cli.Commands;
+using AgentContinuum.Core.Model;
+using AgentContinuum.Core.Recovery;
 
 namespace AgentContinuum.Cli.Tests;
 
@@ -24,5 +26,22 @@ public sealed class DaemonTests : IDisposable
         first.Dispose();
         using var afterFirst = new Daemon(services);
         Assert.True(afterFirst.TryStart());
+    }
+
+    [Fact]
+    public void Start_RecoversALaunchLeftLive()
+    {
+        var services = _c.Services();
+        var opId = _c.F.Ledger.BeginIntent(CliFixture.TaskId);
+        _c.F.Ledger.MarkSpawned(opId, 4321, 1, _c.F.Task.SessionId);
+
+        using var daemon = new Daemon(services);
+        Assert.True(daemon.TryStart());
+
+        Assert.Equal(OpState.Interrupted, _c.F.Ledger.Get(opId)!.State);
+        var task = _c.F.Tasks.Get(CliFixture.TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal(RecoveryService.InterruptedRunReason, task.AttentionReason);
+        Assert.Empty(_c.Host.Started);
     }
 }
