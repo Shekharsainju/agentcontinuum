@@ -230,8 +230,15 @@ internal sealed class JobHostedRun : IHostedRun
         return (int)accounting.ActiveProcesses;
     }
 
-    public KillResult Terminate() =>
-        TerminateJobObject(_job, 1) ? new KillResult(true, 0) : new KillResult(false, Marshal.GetLastWin32Error());
+    // Every kill result is recorded, so a kill on a closed job reports a result instead of throwing.
+    public KillResult Terminate()
+    {
+        if (_job.IsClosed)
+        {
+            return new KillResult(false, ERROR_INVALID_HANDLE);
+        }
+        return TerminateJobObject(_job, 1) ? new KillResult(true, 0) : new KillResult(false, Marshal.GetLastWin32Error());
+    }
 
     public void Dispose()
     {
