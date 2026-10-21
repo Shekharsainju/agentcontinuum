@@ -32,6 +32,8 @@ public sealed class LaunchCoordinator
 
     public const string BaselineNotTakenReason = "Workspace baseline not taken";
 
+    public const string LaunchFailedReason = "Launch failed";
+
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
@@ -100,14 +102,17 @@ public sealed class LaunchCoordinator
         var task = _tasks.Get(taskId)!;
         var rules = _rulesFor(task.CliVersion);
         var opId = _ledger.BeginIntent(taskId);
-        // Without a verified limit signal the hook could not be classified, so it is not installed.
-        var settingsPath = rules?.Limit is { } limit ? WriteSettings(opId, limit) : null;
+        if (TryStart(task, kind, opId, rules) is not { } started)
+        {
+            // As in recovery of an INTENT op with no process: the attempt stays counted and the task is updated
+            // before the op leaves its live state.
+            FlagAttention(taskId, LaunchFailedReason);
+            _ledger.Abandon(opId);
+            return new LaunchReport(false, preflight, opId, null);
+        }
+        using var run = started.Run;
         // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
-        using Stream stdin = kind == LaunchKind.First
-            ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
-            : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
-        using var run = _host.Start(
-            new LaunchSpec(task.CliPath, Args(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
+        using var stdin = started.Stdin;
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         var exited = run.WaitForExit();
@@ -136,6 +141,29 @@ public sealed class LaunchCoordinator
             _notifier.Attention(taskId, flagged.Label, flagged.AttentionReason ?? "");
         }
         return new LaunchReport(true, preflight, opId, classification.Outcome);
+    }
+
+    // The host ends any process it created before it throws, so a failure here means nothing ran.
+    private (IHostedRun Run, Stream Stdin)? TryStart(TaskRecord task, LaunchKind kind, string opId, ClaudeRules? rules)
+    {
+        Stream? stdin = null;
+        try
+        {
+            // Without a verified limit signal the hook could not be classified, so it is not installed.
+            var settingsPath = rules?.Limit is { } limit ? WriteSettings(opId, limit) : null;
+            stdin = kind == LaunchKind.First
+                ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
+                : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
+            var run = _host.Start(
+                new LaunchSpec(task.CliPath, Args(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
+            return (run, stdin);
+        }
+        catch (Exception e)
+        {
+            stdin?.Dispose();
+            _log.Write($"launch op {opId} did not start: {e.GetType().Name}");
+            return null;
+        }
     }
 
     private string WriteSettings(string opId, LimitSignalRule limit)
