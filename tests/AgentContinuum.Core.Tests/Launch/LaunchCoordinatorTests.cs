@@ -372,6 +372,21 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task GrandchildHoldsStdout_JobKilledAfterExit()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        _host.Run.GrandchildHoldsStdout = true;
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, _host.Run.Kills);
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason processes after exit ok True error 0");
+        Assert.Equal(Outcome.Completed, report.Outcome);
+        Assert.Equal(0, _f.Ledger.Get(report.OpId!)!.ExitCode);
+        Assert.NotNull(_f.Tasks.Get(TaskId)!.BaselineFingerprint);
+    }
+
+    [Fact]
     public async Task AttemptsExhausted_NeedsAttention()
     {
         _f.Task = _f.Task with { MaxAttempts = 1 };

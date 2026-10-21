@@ -40,6 +40,7 @@ public sealed class FakeProcessHost : IProcessHost
 public sealed class FakeRun : IHostedRun
 {
     private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _jobKilled = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public List<string> Lines { get; } = [];
 
@@ -50,6 +51,9 @@ public sealed class FakeRun : IHostedRun
 
     /// <summary>Thrown by the stdout reader after <see cref="Lines"/>, while the process is still running.</summary>
     public Exception? StdoutThrows { get; set; }
+
+    /// <summary>A grandchild inherits stdout and keeps it open after the main process exits, until the job is killed.</summary>
+    public bool GrandchildHoldsStdout { get; set; }
 
     public KillResult KillResult { get; set; } = new(true, 0);
 
@@ -70,21 +74,25 @@ public sealed class FakeRun : IHostedRun
     public int ActiveProcesses()
     {
         ActiveQueries++;
-        return Active?.Invoke() ?? (_exit.Task.IsCompleted ? 0 : 1);
+        return Active?.Invoke() ?? (!_exit.Task.IsCompleted || GrandchildAlive ? 1 : 0);
     }
 
     public KillResult Terminate()
     {
         Kills++;
         _exit.TrySetResult(1);
+        _jobKilled.TrySetResult();
         return KillResult;
     }
+
+    private bool GrandchildAlive => GrandchildHoldsStdout && !_jobKilled.Task.IsCompleted;
 
     // Closing the job kills the process, as the real host does.
     public void Dispose()
     {
         Disposed = true;
         _exit.TrySetResult(1);
+        _jobKilled.TrySetResult();
     }
 
     private async IAsyncEnumerable<string> ReadLines()
@@ -103,5 +111,9 @@ public sealed class FakeRun : IHostedRun
             _exit.TrySetResult(code);
         }
         await _exit.Task;
+        if (GrandchildHoldsStdout)
+        {
+            await _jobKilled.Task;
+        }
     }
 }
