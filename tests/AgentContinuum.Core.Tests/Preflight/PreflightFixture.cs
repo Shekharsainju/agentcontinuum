@@ -111,9 +111,13 @@ public sealed class PreflightFixture : IDisposable
 
         public List<(string Exe, string[] Args)> Calls { get; } = [];
 
+        /// <summary>Called on each run, so a test can change state while pre-flight is in progress.</summary>
+        public Action<string[]>? OnRun { get; set; }
+
         public CommandResult Run(string exe, string[] args, IReadOnlyDictionary<string, string> env, TimeSpan timeout)
         {
             Calls.Add((exe, args));
+            OnRun?.Invoke(args);
             return args is ["--version"] ? Version : AuthStatus;
         }
     }

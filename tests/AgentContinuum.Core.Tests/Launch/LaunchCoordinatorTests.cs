@@ -111,6 +111,48 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TaskChangedDuringPreflight_NotLaunchedNoAttempt(bool revoke)
+    {
+        var before = _f.Task.State;
+        _f.Runner.OnRun = _ =>
+        {
+            if (revoke)
+            {
+                _f.Tasks.SetState(TaskId, TaskState.Revoked, null);
+                return;
+            }
+            using var cmd = _f.Store.Connection.CreateCommand();
+            cmd.CommandText = "UPDATE tasks SET permission_mode = 'bypassPermissions'";
+            cmd.ExecuteNonQuery();
+        };
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.Resume, now: true);
+
+        Assert.False(report.Launched);
+        Assert.Equal([PreflightReasons.AdmissionState], report.Preflight.Reasons);
+        Assert.Empty(_host.Started);
+        Assert.Equal(0, OpCount());
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(0, task.AttemptsUsed);
+        Assert.Equal(revoke ? TaskState.Revoked : before, task.State);
+        Assert.Empty(_notifier.Attentions);
+    }
+
+    [Theory]
+    [InlineData("bypassPermissions")]
+    [InlineData("dontAsk")]
+    [InlineData("auto")]
+    [InlineData("Default")]
+    public void BuildArgs_ModeOutsidePolicy_Throws(string mode)
+    {
+        var task = _f.Task with { PermissionMode = mode };
+
+        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First, null));
+    }
+
+    [Theory]
     [InlineData(false, OpState.Interrupted)]
     [InlineData(true, OpState.Classified)]
     public async Task ErrorAfterStart_NeedsAttentionNotifiesAndFreesTask(bool afterExit, OpState opState)
