@@ -38,6 +38,8 @@ public sealed class LaunchCoordinator
 
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
+    private static readonly TimeSpan KillRetryDelay = TimeSpan.FromSeconds(1);
+
     private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
 
     private static readonly TimeSpan EmptyJobPollInterval = TimeSpan.FromMilliseconds(100);
@@ -136,7 +138,7 @@ public sealed class LaunchCoordinator
             // the daemon restarts, with nothing telling the user.
             run.Dispose();
             _log.Write($"launch op {opId} failed: {e.GetType().Name}");
-            EndFailedRun(task, opId);
+            EndFailedRun(task, opId, e is RunStoppedException stopped ? stopped.Reason : RunErrorReason);
             return new LaunchReport(true, preflight, opId, null);
         }
     }
@@ -180,7 +182,7 @@ public sealed class LaunchCoordinator
     // The task is updated before the op leaves its live state, as in recovery. The background limit watcher may
     // still be reading, so the writes take the same lock. The user is told even when the writes fail, since the
     // task may then stay RUNNING until the daemon recovers it.
-    private void EndFailedRun(TaskRecord task, string opId)
+    private void EndFailedRun(TaskRecord task, string opId, string reason)
     {
         try
         {
@@ -189,12 +191,12 @@ public sealed class LaunchCoordinator
                 switch (_ledger.Get(opId)?.State)
                 {
                     case OpState.Intent or OpState.Spawned:
-                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, RunErrorReason);
+                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
                         _ledger.Interrupt(opId);
                         break;
                     case OpState.Exited:
-                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, RunErrorReason);
-                        _ledger.Classify(opId, Outcome.Ambiguous, RunErrorReason);
+                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
+                        _ledger.Classify(opId, Outcome.Ambiguous, reason);
                         break;
                     default:
                         return;
@@ -205,7 +207,7 @@ public sealed class LaunchCoordinator
         {
             _log.Write($"launch op {opId} not closed: {e.GetType().Name}");
         }
-        _notifier.Attention(task.TaskId, task.Label, RunErrorReason);
+        _notifier.Attention(task.TaskId, task.Label, reason);
     }
 
     // The host ends any process it created before it throws, so a failure here means nothing ran.
@@ -291,7 +293,7 @@ public sealed class LaunchCoordinator
             // Killed on the first sign, before more work can run on a route that may not be the subscription.
             if (observed == FirstEventStatus.Mismatch && billing != FirstEventStatus.Mismatch)
             {
-                Kill(run, opId, "billing mismatch");
+                await StopForBilling(run, opId).ConfigureAwait(false);
             }
             billing = observed;
         }
@@ -361,10 +363,29 @@ public sealed class LaunchCoordinator
         return true;
     }
 
-    private void Kill(IHostedRun run, string opId, string reason)
+    // A run on a route that may not be the subscription must not go on. A failed kill is retried once, then the
+    // job is closed, which kills everything in it but leaves nothing more to supervise.
+    private async Task StopForBilling(IHostedRun run, string opId)
+    {
+        const string reason = "billing mismatch";
+        if (Kill(run, opId, reason))
+        {
+            return;
+        }
+        await _delay(KillRetryDelay).ConfigureAwait(false);
+        if (Kill(run, opId, reason))
+        {
+            return;
+        }
+        _log.Write($"close op {opId} reason {reason}");
+        throw new RunStoppedException(RunClassifier.BillingMismatchReason);
+    }
+
+    private bool Kill(IHostedRun run, string opId, string reason)
     {
         var result = run.Terminate();
         _log.Write($"kill op {opId} reason {reason} ok {result.Ok} error {result.Win32Error}");
+        return result.Ok;
     }
 
     private void FlagAttention(string taskId, string reason)
@@ -376,4 +397,9 @@ public sealed class LaunchCoordinator
         _tasks.SetState(taskId, TaskState.NeedsAttention, reason);
         _notifier.Attention(taskId, task.Label, reason);
     }
+}
+
+internal sealed class RunStoppedException(string reason) : Exception(reason)
+{
+    public string Reason { get; } = reason;
 }
