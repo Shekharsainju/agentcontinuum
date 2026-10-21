@@ -2,6 +2,20 @@ using AgentContinuum.Cli;
 using AgentContinuum.Cli.Commands;
 using AgentContinuum.Windows;
 
+// Claude Code runs the hook, and a hook that fails or prints can change how the run ends, so nothing in
+// set-up may escape it either.
+if (args is ["hook", ..])
+{
+    try
+    {
+        return await App.Run(args, AppServices.ForCurrentUser());
+    }
+    catch (Exception)
+    {
+        return 0;
+    }
+}
+
 var services = AppServices.ForCurrentUser();
 var startedByClick = ToastNotifier.StartedByClick();
 if (startedByClick || args is ["daemon"])
