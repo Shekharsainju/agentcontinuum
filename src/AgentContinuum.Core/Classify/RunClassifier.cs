@@ -55,7 +55,7 @@ public static class RunClassifier
             && rule.SuccessWhen.All(r => JsonLiteral.MatchesAny(result.LimitFields.GetValueOrDefault(r.Path), r.Values));
     }
 
-    private static bool IsVerifiedLimit(LimitSignalRule rule, Guid sessionId, HookEvent hook) =>
+    public static bool IsVerifiedLimit(LimitSignalRule rule, Guid sessionId, HookEvent hook) =>
         hook.HookName == rule.Hook
         && Guid.TryParse(hook.SessionId, out var hookSession)
         && hookSession == sessionId
