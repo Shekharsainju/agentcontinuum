@@ -1,6 +1,7 @@
 using System.Globalization;
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Model;
+using AgentContinuum.Core.Preflight;
 using AgentContinuum.Core.State;
 using AgentContinuum.Core.Workspace;
 
@@ -69,6 +70,17 @@ public static class LocalCommands
         var until = (now + BillingProofs.AttestationMaxAge).UtcDateTime;
         services.Out.WriteLine($"overage off attested, valid until {until.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC");
         return 0;
+    }
+
+    // The same pre-flight a launch runs, which never changes task or launch state (R9).
+    public static int Preview(AppServices services, string taskId, bool now)
+    {
+        using var store = services.OpenStore();
+        var s = services;
+        var runner = new PreflightRunner(store, s.Lister, s.Runner, new BillingProofs(s.Runner, s.Clock, store), s.Clock, s.Preflight);
+        var result = runner.Run(taskId, now);
+        services.Out.WriteLine(result.Pass ? "pre-flight passed" : $"pre-flight failed: {string.Join(", ", result.Reasons)}");
+        return result.Pass ? 0 : 1;
     }
 
     private static int NoSuchTask(AppServices services)

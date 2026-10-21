@@ -18,6 +18,10 @@ public static class App
                 return LocalCommands.AcceptWorkspace(services, taskId);
             case ["attest-overage-off"]:
                 return LocalCommands.AttestOverageOff(services);
+            case ["preview", var taskId]:
+                return LocalCommands.Preview(services, taskId, now: false);
+            case ["preview", var taskId, "--now"]:
+                return LocalCommands.Preview(services, taskId, now: true);
             case ["status"]:
                 return StatusCommand.Run(services);
             case ["task", "start", var taskId]:
