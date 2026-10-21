@@ -29,6 +29,29 @@ public sealed class DaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task Run_OffersADueTaskOnceThroughTheNotifier()
+    {
+        _c.F.Task = _c.F.Task with
+        {
+            State = TaskState.WaitingForReset,
+            ResetExpectedAtEpoch = _c.F.Clock.UtcNow.AddMinutes(-5).ToUnixTimeSeconds(),
+            AttemptPermittedAtEpoch = _c.F.Clock.UtcNow.AddMinutes(-3).ToUnixTimeSeconds(),
+        };
+        var services = _c.Services();
+        using var daemon = new Daemon(services);
+        using var stop = new CancellationTokenSource();
+
+        var loop = Task.Run(() => daemon.Run(stop.Token));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        stop.Cancel();
+        await loop.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var offer = Assert.Single(_c.Notifier.Offers);
+        Assert.Equal((CliFixture.TaskId, "sample", false), (offer.TaskId, offer.Label, offer.ResetTimeUnknown));
+        Assert.Equal(TaskState.ResumeOffered, _c.F.Tasks.Get(CliFixture.TaskId)!.State);
+    }
+
+    [Fact]
     public void Start_RecoversALaunchLeftLive()
     {
         var services = _c.Services();
