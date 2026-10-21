@@ -66,11 +66,18 @@ public sealed class Daemon : IDisposable
             return AlreadyRunning;
         }
         _services.Out.WriteLine("daemon running");
+        var sinceTick = System.Diagnostics.Stopwatch.StartNew();
+        Tick();
         try
         {
             while (!stop.IsCancellationRequested)
             {
                 await ProcessRequests().ConfigureAwait(false);
+                if (sinceTick.Elapsed >= _services.TickInterval)
+                {
+                    Tick();
+                    sinceTick.Restart();
+                }
                 await Task.Delay(_services.RequestPoll, stop).ConfigureAwait(false);
             }
         }
@@ -96,6 +103,16 @@ public sealed class Daemon : IDisposable
                 reply = new JsonObject { ["error"] = e.GetType().Name };
             }
             _queue.Complete(request.Id, reply.ToJsonString());
+        }
+    }
+
+    /// <summary>Makes the offers that have come due.</summary>
+    public void Tick()
+    {
+        foreach (var offer in _scheduler.Tick())
+        {
+            _services.Log.Write($"offer task {offer.TaskId}");
+            _services.Notifier.OfferResume(offer);
         }
     }
 
