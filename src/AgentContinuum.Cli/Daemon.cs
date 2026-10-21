@@ -1,3 +1,6 @@
+using AgentContinuum.Core.Classify;
+using AgentContinuum.Core.Recovery;
+using AgentContinuum.Core.Schedule;
 using AgentContinuum.Core.State;
 
 namespace AgentContinuum.Cli;
@@ -10,6 +13,8 @@ public sealed class Daemon : IDisposable
     private readonly AppServices _services;
     private Semaphore? _lock;
     private StateStore? _store;
+    private TaskRepository _tasks = null!;
+    private ResetScheduler _scheduler = null!;
 
     public Daemon(AppServices services)
     {
@@ -28,6 +33,11 @@ public sealed class Daemon : IDisposable
         }
         _lock = gate;
         _store = _services.OpenStore();
+        _tasks = new TaskRepository(_store);
+        _scheduler = new ResetScheduler(_tasks, _services.Clock, _services.Log);
+        var ledger = new LaunchLedger(_store);
+        new RecoveryService(_store, ledger, _tasks, _services.Lister, new OutcomeApplier(_tasks, _scheduler), _services.RulesFor)
+            .Reconcile();
         return true;
     }
 
