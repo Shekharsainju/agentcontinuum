@@ -249,7 +249,11 @@ public sealed class LaunchCoordinator
                         _ledger.Interrupt(opId);
                         break;
                     case OpState.Exited:
-                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
+                        // The outcome may already be applied, and flagging a completed task would make it launchable.
+                        if (_tasks.Get(task.TaskId) is { State: TaskState.Running })
+                        {
+                            _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
+                        }
                         _ledger.Classify(opId, Outcome.Ambiguous, reason);
                         break;
                     default:
