@@ -29,6 +29,10 @@ public sealed class LaunchCoordinator
     public const string ResumePrompt =
         "Continue the task from where you stopped. Your usage limit has reset. Check the repository state before you act.";
 
+    public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
+
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
     private readonly IProcessHost _host;
@@ -41,6 +45,9 @@ public sealed class LaunchCoordinator
     private readonly TaskRepository _tasks;
     private readonly LaunchLedger _ledger;
     private readonly OutcomeApplier _outcomes;
+
+    // The stream reader and the limit watcher run at once, and a SqliteConnection is not safe across threads.
+    private readonly object _db = new();
 
     /// <param name="delay">Waits between checks of a running launch; for tests.</param>
     public LaunchCoordinator(
@@ -91,7 +98,10 @@ public sealed class LaunchCoordinator
             new LaunchSpec(task.CliPath, Args(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
+        var exited = run.WaitForExit();
+        var watch = rules?.Limit is { } watched ? WatchForLimit(run, opId, task.SessionId, watched, exited) : Task.CompletedTask;
         await ReadStream(run, opId, rules);
+        await watch;
         var exitCode = await run.WaitForExit();
         _ledger.MarkExited(opId, exitCode);
 
@@ -148,7 +158,10 @@ public sealed class LaunchCoordinator
             {
                 continue;
             }
-            StreamEventLog.Append(_store, opId, filtered);
+            lock (_db)
+            {
+                StreamEventLog.Append(_store, opId, filtered);
+            }
             var observed = FirstEventCheck.Observe(billing, filtered, rules);
             // Killed on the first sign, before more work can run on a route that may not be the subscription.
             if (observed == FirstEventStatus.Mismatch && billing != FirstEventStatus.Mismatch)
@@ -156,6 +169,30 @@ public sealed class LaunchCoordinator
                 Kill(run, opId, "billing mismatch");
             }
             billing = observed;
+        }
+    }
+
+    // The hook is seen up to one poll after it fired, so the wait is shortened by that much to keep the
+    // whole job ended within LimitKillAfter of the signal.
+    private async Task WatchForLimit(IHostedRun run, string opId, Guid sessionId, LimitSignalRule limit, Task exited)
+    {
+        while (!exited.IsCompleted)
+        {
+            IReadOnlyList<HookEvent> hooks;
+            lock (_db)
+            {
+                hooks = HookRecorder.ForOp(_store, opId);
+            }
+            if (hooks.Any(h => RunClassifier.IsVerifiedLimit(limit, sessionId, h)))
+            {
+                await _delay(LimitKillAfter - HookPollInterval).ConfigureAwait(false);
+                if (run.ActiveProcesses() > 0)
+                {
+                    Kill(run, opId, "limit signal");
+                }
+                return;
+            }
+            await _delay(HookPollInterval).ConfigureAwait(false);
         }
     }
 
