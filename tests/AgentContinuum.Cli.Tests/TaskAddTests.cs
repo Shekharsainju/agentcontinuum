@@ -58,6 +58,7 @@ public sealed class TaskAddTests : IDisposable
     [InlineData("--permission-mode", "bypassPermissions", "error: permission mode must be default, acceptEdits or plan")]
     [InlineData("--prompt-file", "..\\outside.md", "error: prompt file must be a non-empty file inside the worktree")]
     [InlineData("--max-attempts", "0", "error: max attempts must be a whole number from 1 to 100")]
+    [InlineData("--allowed-tools", "--dangerously-skip-permissions", "error: a tool rule must not be empty, start with - or hold control characters")]
     [InlineData("--deadline", "2026-10-19T00:00:00Z", "error: deadline must be a future UTC time")]
     public async Task TaskAdd_RejectsInvalidValues(string option, string value, string expected)
     {

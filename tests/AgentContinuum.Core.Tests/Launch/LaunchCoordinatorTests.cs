@@ -190,6 +190,21 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.False(_host.Run.UsedAfterDispose);
     }
 
+    [Theory]
+    [InlineData("--dangerously-skip-permissions")]
+    [InlineData("--permission-mode")]
+    [InlineData("-p")]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("Read\nEdit")]
+    public void BuildArgs_ToolRuleOutsidePolicy_Throws(string rule)
+    {
+        var task = _f.Task with { AllowedTools = ["Read", rule] };
+
+        Assert.False(LaunchPolicy.IsAllowedToolRule(rule));
+        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First, null));
+    }
+
     [Fact]
     public void BuildArgs_OneArgumentPerAllowedToolRule()
     {
