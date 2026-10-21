@@ -148,6 +148,22 @@ public sealed class LaunchCoordinatorTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task FirstEventMismatch_TerminatesBillingMismatch()
+    {
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine(authSource: "ANTHROPIC_API_KEY"));
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, _host.Run.Kills);
+        Assert.Equal(Outcome.BillingMismatch, report.Outcome);
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Billing unverified", task.AttentionReason);
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason billing mismatch ok True error 0");
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
