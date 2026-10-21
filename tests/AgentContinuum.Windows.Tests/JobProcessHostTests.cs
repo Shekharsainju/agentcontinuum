@@ -91,4 +91,19 @@ public sealed class JobProcessHostTests : IDisposable
 
         Assert.True(FakeClaudeLaunch.WaitUntil(() => !pids.Any(FakeClaudeLaunch.IsRunning), TimeSpan.FromSeconds(5)));
     }
+
+    [Fact]
+    public async Task Env_IsExactlyLaunchSpecEnv()
+    {
+        _launch.Scenario("""{ "exitCode": 0 }""");
+        var env = FakeClaudeLaunch.MinimalEnv();
+        env["AC_ONLY_IN_SPEC"] = "1";
+
+        using var run = new JobProcessHost().Start(_launch.Spec(env: env));
+        await ReadAll(run);
+        Assert.Equal(0, await run.WaitForExit());
+
+        var recorded = _launch.Recorded()["envNames"]!.AsArray().Select(n => n!.GetValue<string>());
+        Assert.Equal(env.Keys.Order(StringComparer.OrdinalIgnoreCase), recorded.Order(StringComparer.OrdinalIgnoreCase));
+    }
 }
