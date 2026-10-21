@@ -274,6 +274,42 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason billing mismatch ok True error 0");
     }
 
+    [Fact]
+    public async Task FirstEventMismatch_KillFailsOnce_Retried()
+    {
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine(authSource: "ANTHROPIC_API_KEY"));
+        _host.Run.KillResults.Enqueue(new KillResult(false, 5));
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(2, _host.Run.Kills);
+        Assert.Equal(Outcome.BillingMismatch, report.Outcome);
+        Assert.Equal(
+            [$"kill op {report.OpId} reason billing mismatch ok False error 5", $"kill op {report.OpId} reason billing mismatch ok True error 0"],
+            _log.Messages.Where(m => m.StartsWith("kill ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task FirstEventMismatch_KillFailsTwice_JobClosed()
+    {
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine(authSource: "ANTHROPIC_API_KEY"));
+        _host.Run.KillResults.Enqueue(new KillResult(false, 5));
+        _host.Run.KillResults.Enqueue(new KillResult(false, 5));
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(2, _host.Run.Kills);
+        Assert.True(_host.Run.Disposed);
+        Assert.Contains(_log.Messages, m => m == $"close op {report.OpId} reason billing mismatch");
+        Assert.Equal(OpState.Interrupted, _f.Ledger.Get(report.OpId!)!.State);
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Billing unverified", task.AttentionReason);
+        Assert.Equal([(TaskId, "sample", "Billing unverified")], _notifier.Attentions);
+    }
+
     private const long ResetEpoch = 1_792_500_000;
 
     private const string AcExe = @"C:\Program Files\AgentContinuum\ac.exe";

@@ -57,6 +57,9 @@ public sealed class FakeRun : IHostedRun
 
     public KillResult KillResult { get; set; } = new(true, 0);
 
+    /// <summary>Handed out by successive kills before <see cref="KillResult"/> applies. A failed kill leaves the run going.</summary>
+    public Queue<KillResult> KillResults { get; } = new();
+
     public int Kills { get; private set; }
 
     public int ActiveQueries { get; private set; }
@@ -80,9 +83,13 @@ public sealed class FakeRun : IHostedRun
     public KillResult Terminate()
     {
         Kills++;
-        _exit.TrySetResult(1);
-        _jobKilled.TrySetResult();
-        return KillResult;
+        var result = KillResults.Count > 0 ? KillResults.Dequeue() : KillResult;
+        if (result.Ok)
+        {
+            _exit.TrySetResult(1);
+            _jobKilled.TrySetResult();
+        }
+        return result;
     }
 
     private bool GrandchildAlive => GrandchildHoldsStdout && !_jobKilled.Task.IsCompleted;
