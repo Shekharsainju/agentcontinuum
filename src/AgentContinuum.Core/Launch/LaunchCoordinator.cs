@@ -1,3 +1,4 @@
+using System.Text;
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Events;
@@ -24,6 +25,9 @@ public sealed record LaunchPaths(string AcExe, string LaunchRoot);
 /// <summary>Runs the spec's launch steps for a first launch or a resume, each behind the same pre-flight.</summary>
 public sealed class LaunchCoordinator
 {
+    public const string ResumePrompt =
+        "Continue the task from where you stopped. Your usage limit has reset. Check the repository state before you act.";
+
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
     private readonly IProcessHost _host;
@@ -77,8 +81,10 @@ public sealed class LaunchCoordinator
         var rules = _rulesFor(task.CliVersion);
         var opId = _ledger.BeginIntent(taskId);
         // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
-        using var stdin = File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)));
-        using var run = _host.Start(new LaunchSpec(task.CliPath, Args(task), task.Worktree, ChildEnv(task), stdin));
+        using Stream stdin = kind == LaunchKind.First
+            ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
+            : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
+        using var run = _host.Start(new LaunchSpec(task.CliPath, Args(task, kind), task.Worktree, ChildEnv(task), stdin));
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         await ReadStream(run, opId, rules);
@@ -92,11 +98,12 @@ public sealed class LaunchCoordinator
         return new LaunchReport(true, preflight, opId, classification.Outcome);
     }
 
-    private static string[] Args(TaskRecord task)
+    private static string[] Args(TaskRecord task, LaunchKind kind)
     {
         List<string> args =
         [
-            "-p", "--session-id", task.SessionId.ToString("D"), "--output-format", "stream-json", "--verbose",
+            "-p", kind == LaunchKind.First ? "--session-id" : "--resume", task.SessionId.ToString("D"),
+            "--output-format", "stream-json", "--verbose",
             "--permission-mode", task.PermissionMode,
         ];
         if (task.AllowedTools.Length > 0)
