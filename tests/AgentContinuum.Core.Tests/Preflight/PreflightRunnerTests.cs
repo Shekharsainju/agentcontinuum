@@ -211,7 +211,7 @@ public sealed class PreflightRunnerTests : IDisposable
 
     private static void AssertCliChanged(PreflightResult result)
     {
-        var reason = Assert.Single(result.Reasons);
+        var reason = Assert.Single(result.Reasons, r => r.StartsWith("CLI_CHANGED", StringComparison.Ordinal));
         Assert.StartsWith("CLI_CHANGED: ", reason);
         Assert.Contains("ac pin-cli", reason);
     }
@@ -365,6 +365,53 @@ public sealed class PreflightRunnerTests : IDisposable
         _f.Task = _f.Task with { PermissionMode = mode };
 
         Assert.True(Run().Pass);
+    }
+
+    [Theory]
+    [InlineData(true, false, "BILLING_UNVERIFIED: P2")]
+    [InlineData(false, true, "BILLING_UNVERIFIED: P4")]
+    [InlineData(true, true, "BILLING_UNVERIFIED: P2, P4")]
+    public void Preflight_BillingProofFails_BillingUnverifiedWithProofIds(bool settingsKey, bool authFails, string expected)
+    {
+        if (settingsKey)
+        {
+            _f.Repo.Write(@".claude\settings.json", """{"env":{"ANTHROPIC_API_KEY":"SENTINEL-p2"}}""");
+        }
+        if (authFails)
+        {
+            _f.Runner.AuthStatus = new CommandResult(1, "", false);
+        }
+
+        var result = Run();
+
+        Assert.Equal([expected], result.Reasons);
+        Assert.DoesNotContain(result.Reasons, r => r.Contains("SENTINEL", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("hash")]
+    [InlineData("missing")]
+    public void Preflight_CliNotPinned_AuthStatusNotRun(string fault)
+    {
+        _f.Task = fault == "hash"
+            ? _f.Task with { CliSha256 = new string('b', 64) }
+            : _f.Task with { CliPath = _f.Outside("claude.exe") };
+
+        var result = Run();
+
+        Assert.Contains("BILLING_UNVERIFIED: P4_UNEVALUABLE", result.Reasons);
+        Assert.Empty(_f.Runner.Calls);
+    }
+
+    [Fact]
+    public void Preflight_NoChildEnvironment_BillingUnverified_NothingRun()
+    {
+        _f.ParentEnv.Remove("SystemRoot");
+
+        var result = Run();
+
+        Assert.Contains("BILLING_UNVERIFIED: P1, P4_UNEVALUABLE", result.Reasons);
+        Assert.Empty(_f.Runner.Calls);
     }
 
     [Fact]
