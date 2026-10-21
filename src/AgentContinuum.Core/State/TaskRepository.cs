@@ -71,8 +71,22 @@ public sealed class TaskRepository
         return tasks;
     }
 
-    public void SetState(string taskId, TaskState state, string? reason) =>
-        Update(taskId, "state = $state, attention_reason = $reason", ("$state", StateText.ToText(state)), ("$reason", reason));
+    // REVOKED is final. A revoke and a run ending can write from different connections in either order, and a
+    // later write must not make a revoked task launchable again.
+    public void SetState(string taskId, TaskState state, string? reason)
+    {
+        using var cmd = _store.Connection.CreateCommand();
+        cmd.CommandText =
+            "UPDATE tasks SET state = $state, attention_reason = $reason WHERE task_id = $task_id AND state <> $revoked";
+        cmd.Parameters.AddWithValue("$task_id", taskId);
+        cmd.Parameters.AddWithValue("$state", StateText.ToText(state));
+        cmd.Parameters.AddWithValue("$reason", (object?)reason ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$revoked", StateText.ToText(TaskState.Revoked));
+        if (cmd.ExecuteNonQuery() != 1 && Get(taskId) is null)
+        {
+            throw new InvalidOperationException($"No task {taskId}.");
+        }
+    }
 
     public bool TryMoveState(string taskId, TaskState from, TaskState to)
     {
