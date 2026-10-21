@@ -80,4 +80,15 @@ public sealed class JobProcessHostTests : IDisposable
 
         Assert.Equal(new KillResult(false, 6), run.Terminate());
     }
+
+    [Fact]
+    public void DisposeHost_KillsOnClose()
+    {
+        var run = StartWithChildren();
+        int[] pids = [run.Pid, .. _launch.ChildPids()];
+
+        run.Dispose();
+
+        Assert.True(FakeClaudeLaunch.WaitUntil(() => !pids.Any(FakeClaudeLaunch.IsRunning), TimeSpan.FromSeconds(5)));
+    }
 }
