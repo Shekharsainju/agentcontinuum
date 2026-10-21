@@ -24,6 +24,7 @@ public sealed class PreflightRunner
             new EligibilityCheck(),
             new ProcessCheck(lister),
             new BinaryCheck(runner),
+            new WorkspaceCheck(host),
         ];
     }
 
