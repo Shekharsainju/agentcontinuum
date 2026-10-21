@@ -265,6 +265,26 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal("Workspace baseline not taken", task.AttentionReason);
     }
 
+    [Fact]
+    public async Task AttemptsExhausted_NeedsAttention()
+    {
+        _f.Task = _f.Task with { MaxAttempts = 1 };
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = 1;
+        _host.Run.Lines.Add(InitLine());
+        FireLimitHookOnStart();
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.Equal(Outcome.UsageLimit, report.Outcome);
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Attempts exhausted", task.AttentionReason);
+        Assert.Null(task.AttemptPermittedAtEpoch);
+        Assert.Equal([(TaskId, "sample", "Attempts exhausted")], _notifier.Attentions);
+        Assert.Empty(_notifier.Offers);
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
