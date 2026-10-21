@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Launch;
+using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Preflight;
 using AgentContinuum.Core.Recovery;
 using AgentContinuum.Core.Schedule;
@@ -123,6 +124,7 @@ public sealed class Daemon : IDisposable
     {
         RequestKinds.Start => Launch(request.TaskId!, LaunchKind.First, now: false),
         RequestKinds.Resume => Launch(request.TaskId!, LaunchKind.Resume, ReadNow(request.ArgsJson)),
+        RequestKinds.Revoke => Task.FromResult(Revoke(request.TaskId!)),
         _ => Task.FromResult(new JsonObject { ["error"] = "unknown request" }),
     };
 
@@ -169,6 +171,26 @@ public sealed class Daemon : IDisposable
         ["launched"] = false,
         ["reasons"] = new JsonArray(reasons.Select(r => (JsonNode?)r).ToArray()),
     };
+
+    // The state is set before the run is stopped, so the stopped run finds its task revoked and leaves it so.
+    private JsonObject Revoke(string taskId)
+    {
+        if (_tasks.Get(taskId) is not { } task)
+        {
+            return new JsonObject { ["error"] = "no such task" };
+        }
+        if (task.State == TaskState.Completed)
+        {
+            return new JsonObject { ["error"] = "task already completed" };
+        }
+        _tasks.SetState(taskId, TaskState.Revoked, null);
+        if (_launches.TryGetValue(taskId, out var launch))
+        {
+            launch.Stop.Cancel();
+        }
+        _services.Log.Write($"revoked task {taskId}");
+        return new JsonObject { ["revoked"] = true };
+    }
 
     private LaunchCoordinator Coordinator(StateStore store)
     {
