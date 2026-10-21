@@ -50,12 +50,7 @@ public sealed class Daemon : IDisposable
         var ledger = new LaunchLedger(_store);
         new RecoveryService(_store, ledger, _tasks, _services.Lister, new OutcomeApplier(_tasks, _scheduler), _services.RulesFor)
             .Reconcile();
-        // A Resume clicked while no daemon ran is stale by now, and acting on it later would be a launch nobody asked for.
-        var expired = _queue.ExpireOlderThan(StaleRequestAge);
-        if (expired > 0)
-        {
-            _services.Log.Write($"expired {expired} stale requests");
-        }
+        ExpireStale();
         return true;
     }
 
@@ -99,8 +94,14 @@ public sealed class Daemon : IDisposable
     /// <summary>Handles every waiting request in order.</summary>
     public async Task ProcessRequests()
     {
-        while (_queue.Next() is { } request)
+        while (true)
         {
+            // Checked before every take as well as at start-up: the loop can be busy with a pre-flight for a while.
+            ExpireStale();
+            if (_queue.Next() is not { } request)
+            {
+                return;
+            }
             JsonObject reply;
             try
             {
@@ -123,6 +124,17 @@ public sealed class Daemon : IDisposable
             _services.Log.Write($"offer task {offer.TaskId}");
             // The task is already RESUME_OFFERED, so a toast that fails still leaves ac status and ac resume.
             Guarded($"offer for task {offer.TaskId}", () => _services.Notifier.OfferResume(offer), "not shown");
+        }
+    }
+
+    // A Resume clicked while no daemon ran, or long ago, is stale, and acting on it now would be a launch nobody
+    // asked for.
+    private void ExpireStale()
+    {
+        var expired = _queue.ExpireOlderThan(StaleRequestAge);
+        if (expired > 0)
+        {
+            _services.Log.Write($"expired {expired} stale requests");
         }
     }
 
