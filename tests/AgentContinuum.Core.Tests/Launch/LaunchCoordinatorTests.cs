@@ -153,6 +153,21 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task ErrorWhileRunning_KilledAndSettledBeforeDispose()
+    {
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine());
+        _host.Run.StdoutThrows = new IOException("pipe broken");
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason run error ok True error 0");
+        Assert.True(_host.Run.Disposed);
+        Assert.False(_host.Run.UsedAfterDispose);
+    }
+
+    [Fact]
     public void BuildArgs_OneArgumentPerAllowedToolRule()
     {
         var task = _f.Task with { AllowedTools = ["Read", "Bash(git diff:*,stat)"] };

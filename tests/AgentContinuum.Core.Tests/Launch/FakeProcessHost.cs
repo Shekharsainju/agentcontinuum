@@ -66,6 +66,8 @@ public sealed class FakeRun : IHostedRun
 
     public bool Disposed { get; private set; }
 
+    public bool UsedAfterDispose { get; private set; }
+
     public int Pid { get; set; } = 4321;
 
     public long CreatedAtFileTime { get; set; } = 133_000_000_000_000_000;
@@ -76,12 +78,14 @@ public sealed class FakeRun : IHostedRun
 
     public int ActiveProcesses()
     {
+        UsedAfterDispose |= Disposed;
         ActiveQueries++;
         return Active?.Invoke() ?? (!_exit.Task.IsCompleted || GrandchildAlive ? 1 : 0);
     }
 
     public KillResult Terminate()
     {
+        UsedAfterDispose |= Disposed;
         Kills++;
         var result = KillResults.Count > 0 ? KillResults.Dequeue() : KillResult;
         if (result.Ok)
