@@ -46,6 +46,8 @@ public sealed class LaunchCoordinator
 
     private static readonly TimeSpan EmptyJobWait = TimeSpan.FromSeconds(10);
 
+    private static readonly TimeSpan SettleWait = TimeSpan.FromSeconds(30);
+
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
     private readonly IProcessHost _host;
@@ -145,7 +147,6 @@ public sealed class LaunchCoordinator
 
     private async Task<Outcome> Supervise(TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules)
     {
-        var taskId = task.TaskId;
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         var exited = run.WaitForExit();
@@ -153,6 +154,21 @@ public sealed class LaunchCoordinator
         // main process exits, and only killing the job then ends the stream.
         var emptied = EmptyJobAfterExit(run, opId, exited);
         var watch = rules?.Limit is { } watched ? WatchForLimit(run, opId, task.SessionId, watched, exited) : Task.CompletedTask;
+        try
+        {
+            return await Follow(task, opId, run, rules, exited, emptied, watch);
+        }
+        catch (Exception e)
+        {
+            await StopFailedRun(run, opId, e is RunStoppedException, exited, emptied, watch);
+            throw;
+        }
+    }
+
+    private async Task<Outcome> Follow(
+        TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Task<int> exited, Task<bool> emptied, Task watch)
+    {
+        var taskId = task.TaskId;
         await ReadStream(run, opId, rules);
         await watch;
         var exitCode = await exited;
@@ -177,6 +193,35 @@ public sealed class LaunchCoordinator
             _notifier.Attention(taskId, flagged.Label, flagged.AttentionReason ?? "");
         }
         return classification.Outcome;
+    }
+
+    // The watcher and the empty-job wait still use the run and the store, so they finish before the run is
+    // disposed. A run whose job is already being closed has nothing left to kill.
+    private async Task StopFailedRun(IHostedRun run, string opId, bool jobClosing, params Task[] background)
+    {
+        if (jobClosing || !Kill(run, opId, "run error"))
+        {
+            run.Dispose();
+        }
+        try
+        {
+            await Task.WhenAll(background.Select(Settled)).WaitAsync(SettleWait).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _log.Write($"launch op {opId} background work still running");
+        }
+    }
+
+    private static async Task Settled(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+        }
     }
 
     // The task is updated before the op leaves its live state, as in recovery. The background limit watcher may
