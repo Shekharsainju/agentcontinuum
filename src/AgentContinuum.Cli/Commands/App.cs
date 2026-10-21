@@ -10,6 +10,12 @@ public static class App
         {
             case ["daemon"]:
                 return await RunDaemon(services);
+            case ["task", "start", var taskId]:
+                return LaunchCommands.Start(services, taskId);
+            case ["resume", var taskId]:
+                return LaunchCommands.Resume(services, taskId, now: false);
+            case ["resume", var taskId, "--now"]:
+                return LaunchCommands.Resume(services, taskId, now: true);
             default:
                 return Usage(services);
         }

@@ -41,7 +41,7 @@ public sealed class CliFixture : IDisposable
             F.Runner,
             preflightHost,
             @"C:\Program Files\AgentContinuum\ac.exe",
-            Out,
+            TextWriter.Synchronized(Out),
             In,
             LockName,
             ClientWait: TimeSpan.FromSeconds(1),
