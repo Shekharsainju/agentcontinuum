@@ -31,6 +31,22 @@ public sealed class TaskRepositoryTests : IDisposable
         Assert.Equivalent(task, _tasks.Get("t1"), strict: true);
     }
 
+    [Theory]
+    [InlineData(TaskState.NeedsAttention)]
+    [InlineData(TaskState.WaitingForReset)]
+    [InlineData(TaskState.Completed)]
+    [InlineData(TaskState.Queued)]
+    public void SetState_RevokedTaskStaysRevoked(TaskState state)
+    {
+        _tasks.Add(TestTasks.Sample("t1"));
+        _tasks.SetState("t1", TaskState.Revoked, null);
+
+        _tasks.SetState("t1", state, "a late outcome");
+
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.Revoked, (string?)null), (task.State, task.AttentionReason));
+    }
+
     [Fact]
     public void Get_UnknownTask_ReturnsNull()
     {
