@@ -68,10 +68,16 @@ public sealed class CliFixture : IDisposable
     {
         public List<Offer> Offers { get; } = [];
 
+        public bool ThrowOnOffer { get; set; }
+
         public List<(string TaskId, string Label, string ReasonCode)> Attentions { get; } = [];
 
         public void OfferResume(Offer offer)
         {
+            if (ThrowOnOffer)
+            {
+                throw new InvalidOperationException("toast failed");
+            }
             lock (Offers)
             {
                 Offers.Add(offer);

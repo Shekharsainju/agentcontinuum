@@ -52,6 +52,28 @@ public sealed class DaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task Run_NotifierFails_LoopKeepsServingRequests()
+    {
+        _c.F.Task = _c.F.Task with
+        {
+            State = TaskState.WaitingForReset,
+            AttemptPermittedAtEpoch = _c.F.Clock.UtcNow.AddMinutes(-3).ToUnixTimeSeconds(),
+        };
+        _c.Notifier.ThrowOnOffer = true;
+        var services = _c.Services();
+        using var daemon = new Daemon(services);
+        using var stop = new CancellationTokenSource();
+
+        var loop = Task.Run(() => daemon.Run(stop.Token));
+        var exit = await Commands.App.Run(["revoke", CliFixture.TaskId], services).WaitAsync(TimeSpan.FromSeconds(10));
+        stop.Cancel();
+
+        Assert.Equal(0, exit);
+        Assert.Equal(0, await loop.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Contains("offer for task t1 not shown: InvalidOperationException", _c.Log.Messages);
+    }
+
+    [Fact]
     public void Start_RecoversALaunchLeftLive()
     {
         var services = _c.Services();
