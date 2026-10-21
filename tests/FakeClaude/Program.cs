@@ -133,7 +133,9 @@ static void Emit(JsonObject e)
 internal sealed record Options(string? SessionId, string? Resume, string? SettingsPath)
 {
     private static readonly string[] ValueFlags =
-        ["--session-id", "--resume", "--output-format", "--permission-mode", "--allowedTools", "--settings"];
+        ["--session-id", "--resume", "--output-format", "--permission-mode", "--settings"];
+
+    private const string ListFlag = "--allowedTools";
 
     private static readonly string[] SwitchFlags = ["-p", "--verbose"];
 
@@ -145,6 +147,21 @@ internal sealed record Options(string? SessionId, string? Resume, string? Settin
         {
             if (SwitchFlags.Contains(args[i]))
             {
+                continue;
+            }
+            // The rules follow as separate arguments, up to the next flag.
+            if (args[i] == ListFlag)
+            {
+                var first = i + 1;
+                while (i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+                {
+                    i++;
+                }
+                if (i < first)
+                {
+                    options = new Options(null, null, null);
+                    return false;
+                }
                 continue;
             }
             if (!ValueFlags.Contains(args[i]) || i + 1 >= args.Length)

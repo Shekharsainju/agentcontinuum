@@ -262,7 +262,8 @@ public sealed class LaunchCoordinator
         ];
         if (task.AllowedTools.Length > 0)
         {
-            args.AddRange(["--allowedTools", string.Join(',', task.AllowedTools)]);
+            // One argument per rule: a joined value would split any rule that itself contains a comma.
+            args.AddRange(["--allowedTools", .. task.AllowedTools]);
         }
         if (settingsPath is not null)
         {
