@@ -153,6 +153,29 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task ClassifyFailsAfterOutcomeApplied_OutcomeKept()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        _f.EnsureAdded();
+        using (var cmd = _f.Store.Connection.CreateCommand())
+        {
+            cmd.CommandText = """
+                CREATE TRIGGER fail_completed BEFORE UPDATE ON launch_ops
+                WHEN NEW.outcome = 'COMPLETED' BEGIN SELECT RAISE(ABORT, 'classify failed'); END
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        var op = _f.Ledger.Get(report.OpId!)!;
+        Assert.Equal(OpState.Classified, op.State);
+        Assert.Equal(Outcome.Ambiguous, op.Outcome);
+        Assert.Equal("Run error", op.Reason);
+        Assert.Equal(TaskState.Completed, _f.Tasks.Get(TaskId)!.State);
+    }
+
+    [Fact]
     public async Task ErrorWhileRunning_KilledAndSettledBeforeDispose()
     {
         _rules = _rules! with { Limit = Limit };
