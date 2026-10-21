@@ -337,6 +337,10 @@ public sealed class LaunchCoordinator
         {
             throw new InvalidOperationException("The permission mode is outside the launch policy.");
         }
+        if (!task.AllowedTools.All(LaunchPolicy.IsAllowedToolRule))
+        {
+            throw new InvalidOperationException("A tool rule is outside the launch policy.");
+        }
         List<string> args =
         [
             "-p", kind == LaunchKind.First ? "--session-id" : "--resume", task.SessionId.ToString("D"),

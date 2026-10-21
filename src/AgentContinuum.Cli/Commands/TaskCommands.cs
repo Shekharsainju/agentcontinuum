@@ -79,6 +79,10 @@ public static class TaskCommands
             var modes = LaunchPolicy.PermissionModes;
             return new($"permission mode must be {string.Join(", ", modes[..^1])} or {modes[^1]}");
         }
+        if (!options.All("--allowed-tools").All(LaunchPolicy.IsAllowedToolRule))
+        {
+            return new("a tool rule must not be empty, start with - or hold control characters");
+        }
         if (!int.TryParse(options.One("--max-attempts"), NumberStyles.None, CultureInfo.InvariantCulture, out var attempts)
             || attempts < 1 || attempts > MaxAttemptsLimit)
         {

@@ -11,4 +11,9 @@ public static class LaunchPolicy
     public static bool IsLaunchable(TaskState state) => LaunchableStates.Contains(state);
 
     public static bool IsAllowedMode(string mode) => PermissionModes.Contains(mode, StringComparer.Ordinal);
+
+    // Each rule follows --allowedTools as its own argument, so one that starts with - would be read as a new flag,
+    // such as a second --permission-mode after the checked one.
+    public static bool IsAllowedToolRule(string rule) =>
+        !string.IsNullOrWhiteSpace(rule) && !rule.TrimStart().StartsWith('-') && !rule.Any(char.IsControl);
 }
