@@ -285,6 +285,41 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Empty(_notifier.Offers);
     }
 
+    [Fact]
+    public async Task NoContentInDbOrLog()
+    {
+        _f.Task = _f.Task with { MaxAttempts = 1 };
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = 1;
+        _host.Run.Lines.AddRange(
+        [
+            InitLine(),
+            $$$"""{"type":"assistant","session_id":"{{{Session}}}","message":{"content":[{"type":"text","text":"SENTINEL-stream"}]}}""",
+            $$"""{"type":"result","session_id":"{{Session}}","is_error":true,"result":"SENTINEL-stream"}""",
+            "SENTINEL-stream not json",
+        ]);
+        FireLimitHookOnStart();
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+        Assert.True(report.Launched);
+        Assert.Contains("SENTINEL-prompt", _host.StdinTexts.Single());
+        _f.Store.Connection.Close();
+
+        var dbDir = Path.GetDirectoryName(_f.Store.Connection.DataSource)!;
+        var written = Directory.GetFiles(dbDir, "ac.db*").Select(ReadShared)
+            .Concat(Directory.GetFiles(_f.Outside("launch"), "*", SearchOption.AllDirectories).Select(ReadShared))
+            .Concat(_log.Messages)
+            .Concat(_notifier.Attentions.Select(a => $"{a.TaskId} {a.Label} {a.ReasonCode}"));
+        Assert.All(written, text => Assert.DoesNotContain("SENTINEL", text));
+    }
+
+    private static string ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.Latin1);
+        return reader.ReadToEnd();
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
