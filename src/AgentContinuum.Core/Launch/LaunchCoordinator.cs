@@ -126,6 +126,10 @@ public sealed class LaunchCoordinator
             _tasks.SetState(taskId, TaskState.NeedsAttention, BaselineNotTakenReason);
         }
         _ledger.Classify(opId, classification.Outcome, classification.Reason);
+        if (_tasks.Get(taskId) is { State: TaskState.NeedsAttention } flagged)
+        {
+            _notifier.Attention(taskId, flagged.Label, flagged.AttentionReason ?? "");
+        }
         return new LaunchReport(true, preflight, opId, classification.Outcome);
     }
 
