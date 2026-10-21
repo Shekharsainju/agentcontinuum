@@ -48,6 +48,9 @@ public sealed class FakeRun : IHostedRun
     /// <summary>Overrides the default of one process while running and none after exit.</summary>
     public Func<int>? Active { get; set; }
 
+    /// <summary>Thrown by the stdout reader after <see cref="Lines"/>, while the process is still running.</summary>
+    public Exception? StdoutThrows { get; set; }
+
     public KillResult KillResult { get; set; } = new(true, 0);
 
     public int Kills { get; private set; }
@@ -77,7 +80,12 @@ public sealed class FakeRun : IHostedRun
         return KillResult;
     }
 
-    public void Dispose() => Disposed = true;
+    // Closing the job kills the process, as the real host does.
+    public void Dispose()
+    {
+        Disposed = true;
+        _exit.TrySetResult(1);
+    }
 
     private async IAsyncEnumerable<string> ReadLines()
     {
@@ -85,6 +93,10 @@ public sealed class FakeRun : IHostedRun
         {
             await Task.Yield();
             yield return line;
+        }
+        if (StdoutThrows is { } e)
+        {
+            throw e;
         }
         if (ExitCode is { } code)
         {

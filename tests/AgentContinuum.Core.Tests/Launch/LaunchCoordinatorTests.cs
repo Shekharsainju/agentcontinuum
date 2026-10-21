@@ -110,6 +110,36 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Contains(_log.Messages, m => m == $"launch op {report.OpId} did not start: IOException");
     }
 
+    [Theory]
+    [InlineData(false, OpState.Interrupted)]
+    [InlineData(true, OpState.Classified)]
+    public async Task ErrorAfterStart_NeedsAttentionNotifiesAndFreesTask(bool afterExit, OpState opState)
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        if (afterExit)
+        {
+            _host.Run.Active = () => throw new IOException("job query failed");
+        }
+        else
+        {
+            _host.Run.ExitCode = null;
+            _host.Run.StdoutThrows = new IOException("pipe broken");
+        }
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(report.Launched);
+        Assert.Null(report.Outcome);
+        Assert.True(_host.Run.Disposed);
+        Assert.Equal(opState, _f.Ledger.Get(report.OpId!)!.State);
+        Assert.Null(_f.Ledger.Live(TaskId));
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Run error", task.AttentionReason);
+        Assert.Equal([(TaskId, "sample", "Run error")], _notifier.Attentions);
+        Assert.Contains(_log.Messages, m => m == $"launch op {report.OpId} failed: IOException");
+    }
+
     private string Session => _f.Task.SessionId.ToString("D");
 
     private string InitLine(string authSource = "none") =>
