@@ -93,6 +93,23 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Empty(_host.Started);
     }
 
+    [Fact]
+    public async Task HostStartFails_AbandonedNeedsAttention()
+    {
+        _host.StartThrows = new IOException("could not start");
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.False(report.Launched);
+        Assert.Equal(OpState.Abandoned, _f.Ledger.Get(report.OpId!)!.State);
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(1, task.AttemptsUsed);
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Launch failed", task.AttentionReason);
+        Assert.Equal([(TaskId, "sample", "Launch failed")], _notifier.Attentions);
+        Assert.Contains(_log.Messages, m => m == $"launch op {report.OpId} did not start: IOException");
+    }
+
     private string Session => _f.Task.SessionId.ToString("D");
 
     private string InitLine(string authSource = "none") =>
