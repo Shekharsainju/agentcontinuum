@@ -414,6 +414,38 @@ public sealed class PreflightRunnerTests : IDisposable
         Assert.Empty(_f.Runner.Calls);
     }
 
+    private void Sql(string sql)
+    {
+        using var cmd = _f.Store.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    [Theory]
+    [InlineData("UPDATE meta SET value = '2' WHERE key = 'schema_version'")]
+    [InlineData("DELETE FROM meta WHERE key = 'schema_version'")]
+    public void Preflight_SchemaVersionDiffers_ControllerState(string sql)
+    {
+        Sql(sql);
+
+        Assert.Equal(["CONTROLLER_STATE"], Run().Reasons);
+    }
+
+    [Fact]
+    public void Preflight_IntegrityCheckFails_ControllerState()
+    {
+        // integrity_check verifies CHECK constraints, so a row written past one fails it while every page still reads.
+        Sql("""
+            CREATE TABLE probe (x INTEGER CHECK (x > 0));
+            PRAGMA ignore_check_constraints = ON;
+            INSERT INTO probe VALUES (-1);
+            PRAGMA ignore_check_constraints = OFF;
+            """);
+        Assert.False(_f.Store.IntegrityOk());
+
+        Assert.Equal(["CONTROLLER_STATE"], Run().Reasons);
+    }
+
     [Fact]
     public void Preflight_UnknownTask_AdmissionState()
     {
