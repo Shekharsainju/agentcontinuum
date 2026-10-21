@@ -1,4 +1,6 @@
+using AgentContinuum.Core.Model;
 using AgentContinuum.Core.State;
+using AgentContinuum.Core.Workspace;
 
 namespace AgentContinuum.Cli.Commands;
 
@@ -27,6 +29,32 @@ public static class LocalCommands
         tasks.SetCliPin(taskId, pin.Path, pin.Sha256, pin.Version);
         services.Log.Write($"pinned task {taskId} to cli {pin.Version}");
         services.Out.WriteLine($"pinned {pin.Version}");
+        return 0;
+    }
+
+    // A live launch may still be writing to the worktree, and a baseline taken now would hide that work.
+    public static int AcceptWorkspace(AppServices services, string taskId)
+    {
+        using var store = services.OpenStore();
+        var tasks = new TaskRepository(store);
+        if (tasks.Get(taskId) is not { } task)
+        {
+            return NoSuchTask(services);
+        }
+        if (task.State == TaskState.Running || new LaunchLedger(store).Live(taskId) is not null)
+        {
+            services.Out.WriteLine("error: task has a live launch");
+            return 1;
+        }
+        var result = WorkspaceFingerprint.Compute(task.Worktree, services.Preflight.GitExe, services.Preflight.FingerprintMaxFiles);
+        if (result is not { Hash: { } hash, Incomplete: false })
+        {
+            services.Out.WriteLine(result.Incomplete ? "error: workspace too large" : "error: workspace could not be read");
+            return 1;
+        }
+        tasks.SetBaseline(taskId, hash);
+        services.Log.Write($"accepted workspace for task {taskId}");
+        services.Out.WriteLine("baseline taken");
         return 0;
     }
 

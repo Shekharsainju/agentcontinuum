@@ -14,6 +14,8 @@ public static class App
                 return TaskCommands.Add(services, addArgs);
             case ["pin-cli", var taskId, .. var pinArgs]:
                 return LocalCommands.PinCli(services, taskId, pinArgs);
+            case ["accept-workspace", var taskId]:
+                return LocalCommands.AcceptWorkspace(services, taskId);
             case ["status"]:
                 return StatusCommand.Run(services);
             case ["task", "start", var taskId]:
