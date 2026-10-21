@@ -71,4 +71,13 @@ public sealed class JobProcessHostTests : IDisposable
         Assert.All(children, pid => Assert.False(FakeClaudeLaunch.IsRunning(pid)));
         Assert.Equal(1, await run.WaitForExit().WaitAsync(TimeSpan.FromSeconds(5)));
     }
+
+    [Fact]
+    public void Terminate_ReturnsWin32Result()
+    {
+        var run = StartWithChildren();
+        run.Dispose();
+
+        Assert.Equal(new KillResult(false, 6), run.Terminate());
+    }
 }
