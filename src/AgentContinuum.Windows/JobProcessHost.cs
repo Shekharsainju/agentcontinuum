@@ -220,9 +220,18 @@ internal sealed class JobHostedRun : IHostedRun
 
     public Task<int> WaitForExit() => _exit.Value;
 
-    public int ActiveProcesses() => throw new NotImplementedException();
+    public int ActiveProcesses()
+    {
+        if (!QueryInformationJobObject(_job, JobObjectBasicAccountingInformation, out var accounting,
+                Marshal.SizeOf<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>(), IntPtr.Zero))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not query the job.");
+        }
+        return (int)accounting.ActiveProcesses;
+    }
 
-    public KillResult Terminate() => throw new NotImplementedException();
+    public KillResult Terminate() =>
+        TerminateJobObject(_job, 1) ? new KillResult(true, 0) : new KillResult(false, Marshal.GetLastWin32Error());
 
     public void Dispose()
     {
