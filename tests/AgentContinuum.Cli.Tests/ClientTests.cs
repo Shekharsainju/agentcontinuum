@@ -30,6 +30,22 @@ public sealed class ClientTests : IDisposable
     }
 
     [Fact]
+    public async Task Submit_NoDaemon_TimesOutAndDeletesRequest()
+    {
+        var services = _c.Services();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var exit = await App.Run(["resume", TaskId], services);
+
+        Assert.Equal(DaemonClient.NotRunning, exit);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.Equal("daemon not running", _c.Output.Trim());
+        using var cmd = _c.F.Store.Connection.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM requests";
+        Assert.Equal(0L, cmd.ExecuteScalar());
+    }
+
+    [Fact]
     public async Task TaskStart_PrintsLaunchedOp()
     {
         _c.Host.Run.Lines.AddRange([_c.InitLine(), _c.SuccessLine()]);
