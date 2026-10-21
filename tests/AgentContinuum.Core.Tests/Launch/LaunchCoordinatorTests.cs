@@ -76,6 +76,23 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal([(TaskId, "sample", PreflightReasons.ProcessUnknown)], _notifier.Attentions);
     }
 
+    [Theory]
+    [InlineData(TaskState.Revoked)]
+    [InlineData(TaskState.Completed)]
+    [InlineData(TaskState.Running)]
+    public async Task PreflightFails_NotLaunchable_StateUnchanged(TaskState state)
+    {
+        _f.Task = _f.Task with { State = state };
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.Resume, now: true);
+
+        Assert.False(report.Launched);
+        Assert.Contains(PreflightReasons.AdmissionState, report.Preflight.Reasons);
+        Assert.Equal(state, _f.Tasks.Get(TaskId)!.State);
+        Assert.Empty(_notifier.Attentions);
+        Assert.Empty(_host.Started);
+    }
+
     private string Session => _f.Task.SessionId.ToString("D");
 
     private string InitLine(string authSource = "none") =>
