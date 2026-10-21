@@ -270,6 +270,29 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task Started_CalledOnceAfterSpawnWithOpId()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        var started = new List<(string OpId, OpState State)>();
+
+        var report = await Coordinator().Launch(
+            TaskId, LaunchKind.First, now: false, started: op => started.Add((op, _f.Ledger.Get(op)!.State)));
+
+        Assert.Equal([(report.OpId!, OpState.Spawned)], started);
+    }
+
+    [Fact]
+    public async Task Started_NotCalledWhenRefused()
+    {
+        _f.Lister.Throw = new ProcessListException("enumeration failed");
+        var started = 0;
+
+        await Coordinator().Launch(TaskId, LaunchKind.First, now: false, started: _ => started++);
+
+        Assert.Equal(0, started);
+    }
+
+    [Fact]
     public async Task Resume_ArgsUseResumeAndFixedPrompt()
     {
         _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
