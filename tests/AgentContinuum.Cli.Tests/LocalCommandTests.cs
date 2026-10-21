@@ -68,6 +68,26 @@ public sealed class LocalCommandTests : IDisposable
         Assert.Equal(_c.F.Clock.UtcNow, new Core.State.Attestations(_c.F.Store).Latest(Core.State.Attestations.OverageOff));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Preview_ReportsPreflightAndChangesNothing(bool fails)
+    {
+        if (fails)
+        {
+            _c.F.Lister.Throw = new Core.Platform.ProcessListException("enumeration failed");
+        }
+        var services = _c.Services();
+
+        var exit = await App.Run(["preview", TaskId], services);
+
+        Assert.Equal(fails ? 1 : 0, exit);
+        Assert.Equal(fails ? "pre-flight failed: PROCESS_UNKNOWN" : "pre-flight passed", _c.Output.Trim());
+        Assert.Empty(_c.Host.Started);
+        Assert.Equal(_c.F.Task, _c.F.Tasks.Get(TaskId)! with { AllowedTools = _c.F.Task.AllowedTools });
+        Assert.Empty(_c.Notifier.Attentions);
+    }
+
     [Fact]
     public async Task PinCli_RefusesANonExe()
     {
