@@ -30,11 +30,15 @@ public sealed class LaunchCoordinator
     public const string ResumePrompt =
         "Continue the task from where you stopped. Your usage limit has reset. Check the repository state before you act.";
 
+    public const string BaselineNotTakenReason = "Workspace baseline not taken";
+
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
 
     private static readonly TimeSpan EmptyJobPollInterval = TimeSpan.FromMilliseconds(100);
+
+    private static readonly TimeSpan EmptyJobWait = TimeSpan.FromSeconds(10);
 
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
@@ -107,11 +111,20 @@ public sealed class LaunchCoordinator
         await watch;
         var exitCode = await run.WaitForExit();
         _ledger.MarkExited(opId, exitCode);
-        await TakeBaseline(run, task);
+        var baselineTaken = await TakeBaseline(run, opId, task);
 
         var classification = RunClassifier.Classify(
             rules, task.SessionId, StreamEventLog.ForOp(_store, opId), HookRecorder.ForOp(_store, opId), exitCode);
-        _outcomes.Apply(taskId, classification);
+        // Without a fresh baseline the next pre-flight would compare against a stale one or none, so a task that
+        // could launch again goes to attention instead, in the same single write the outcome would have made.
+        if (baselineTaken || classification.Outcome == Outcome.Completed)
+        {
+            _outcomes.Apply(taskId, classification);
+        }
+        else
+        {
+            _tasks.SetState(taskId, TaskState.NeedsAttention, BaselineNotTakenReason);
+        }
         _ledger.Classify(opId, classification.Outcome, classification.Reason);
         return new LaunchReport(true, preflight, opId, classification.Outcome);
     }
@@ -201,17 +214,36 @@ public sealed class LaunchCoordinator
     }
 
     // A child can outlive the main process and keep writing, so the snapshot waits for the job to empty.
-    private async Task TakeBaseline(IHostedRun run, TaskRecord task)
+    private async Task<bool> TakeBaseline(IHostedRun run, string opId, TaskRecord task)
     {
-        while (run.ActiveProcesses() > 0)
+        if (!await WaitForEmptyJob(run).ConfigureAwait(false))
         {
-            await _delay(EmptyJobPollInterval).ConfigureAwait(false);
+            Kill(run, opId, "processes after exit");
+            if (!await WaitForEmptyJob(run).ConfigureAwait(false))
+            {
+                return false;
+            }
         }
         var result = WorkspaceFingerprint.Compute(task.Worktree, _preflightHost.GitExe, _preflightHost.FingerprintMaxFiles);
-        if (result is { Hash: { } hash, Incomplete: false })
+        if (result is not { Hash: { } hash, Incomplete: false })
         {
-            _tasks.SetBaseline(task.TaskId, hash);
+            return false;
         }
+        _tasks.SetBaseline(task.TaskId, hash);
+        return true;
+    }
+
+    private async Task<bool> WaitForEmptyJob(IHostedRun run)
+    {
+        for (var waited = TimeSpan.Zero; run.ActiveProcesses() > 0; waited += EmptyJobPollInterval)
+        {
+            if (waited >= EmptyJobWait)
+            {
+                return false;
+            }
+            await _delay(EmptyJobPollInterval).ConfigureAwait(false);
+        }
+        return true;
     }
 
     private void Kill(IHostedRun run, string opId, string reason)
