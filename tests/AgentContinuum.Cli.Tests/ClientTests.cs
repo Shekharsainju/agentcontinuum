@@ -58,6 +58,27 @@ public sealed class ClientTests : IDisposable
     }
 
     [Fact]
+    public async Task Revoke_TerminatesRunAndRefusesLaunch()
+    {
+        _c.Host.Run.ExitCode = null;
+        _c.Host.Run.Lines.Add(_c.InitLine());
+
+        var (start, revoke, resume) = await WithDaemon(async services =>
+            (await App.Run(["task", "start", TaskId], services),
+                await App.Run(["revoke", TaskId], services),
+                await App.Run(["resume", TaskId, "--now"], services)));
+
+        Assert.Equal((0, 0, 1), (start, revoke, resume));
+        var lines = _c.Output.Split(Environment.NewLine);
+        Assert.Contains("revoked", lines);
+        Assert.Contains("refused: ADMISSION_STATE", lines);
+        Assert.Equal(1, _c.Host.Run.Kills);
+        Assert.Single(_c.Host.Started);
+        Assert.Null(_c.F.Ledger.Live(TaskId));
+        Assert.Equal(TaskState.Revoked, _c.F.Tasks.Get(TaskId)!.State);
+    }
+
+    [Fact]
     public async Task Resume_Refused_PrintsReasonsExits1()
     {
         _c.F.Task = _c.F.Task with { State = TaskState.ResumeOffered };
