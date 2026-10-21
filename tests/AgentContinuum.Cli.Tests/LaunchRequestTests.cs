@@ -47,6 +47,21 @@ public sealed class LaunchRequestTests : IDisposable
     }
 
     [Fact]
+    public async Task RequestGoneStaleWhileDaemonRuns_NeverLaunches()
+    {
+        using var daemon = Started();
+        var queue = new RequestQueue(_c.F.Store, _c.F.Clock);
+        var stale = queue.Submit(RequestKinds.Start, TaskId, "{}");
+        _c.F.Clock.Advance(TimeSpan.FromSeconds(61));
+
+        await daemon.ProcessRequests();
+
+        Assert.Empty(_c.Host.Started);
+        Assert.Null(queue.WaitFor(stale, TimeSpan.Zero));
+        Assert.Equal(TaskState.Queued, _c.F.Tasks.Get(TaskId)!.State);
+    }
+
+    [Fact]
     public async Task StartRequest_RepliesWithOpThenRunsToTheEnd()
     {
         _c.Host.Run.Lines.AddRange([_c.InitLine(), _c.SuccessLine()]);
