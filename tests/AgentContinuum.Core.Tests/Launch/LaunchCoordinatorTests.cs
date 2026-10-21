@@ -111,6 +111,21 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.True(_host.Run.Disposed);
     }
 
+    [Fact]
+    public async Task Resume_ArgsUseResumeAndFixedPrompt()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+
+        await Coordinator().Launch(TaskId, LaunchKind.Resume, now: false);
+
+        var spec = Assert.Single(_host.Started);
+        Assert.Equal(["-p", "--resume", Session], spec.Args[..3]);
+        Assert.DoesNotContain("--session-id", spec.Args);
+        Assert.Equal(
+            ["Continue the task from where you stopped. Your usage limit has reset. Check the repository state before you act."],
+            _host.StdinTexts);
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
