@@ -246,6 +246,25 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal(WorkspaceFingerprint.Compute(_f.Repo.Path, GitRepo.GitExe).Hash, _f.Tasks.Get(TaskId)!.BaselineFingerprint);
     }
 
+    [Fact]
+    public async Task Baseline_JobNeverEmpties_TerminatedAndNeedsAttention()
+    {
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = 1;
+        _host.Run.Lines.Add(InitLine());
+        _host.Run.Active = () => 1;
+        FireLimitHookOnStart();
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(Outcome.UsageLimit, report.Outcome);
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason processes after exit ok True error 0");
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Null(task.BaselineFingerprint);
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Workspace baseline not taken", task.AttentionReason);
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
