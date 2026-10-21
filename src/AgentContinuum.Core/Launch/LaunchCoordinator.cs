@@ -93,7 +93,8 @@ public sealed class LaunchCoordinator
         _outcomes = new OutcomeApplier(_tasks, usageLimits);
     }
 
-    public async Task<LaunchReport> Launch(string taskId, LaunchKind kind, bool now)
+    /// <param name="started">Called with the op ID once the process is running, long before the run ends.</param>
+    public async Task<LaunchReport> Launch(string taskId, LaunchKind kind, bool now, Action<string>? started = null)
     {
         var preflight = _preflight.Run(taskId, now);
         if (!preflight.Pass)
@@ -120,7 +121,7 @@ public sealed class LaunchCoordinator
             _log.Write($"launch of task {taskId} refused at intent");
             return new LaunchReport(false, new PreflightResult(false, [PreflightReasons.AdmissionState]), null, null);
         }
-        if (TryStart(task, kind, opId, rules) is not { } started)
+        if (TryStart(task, kind, opId, rules) is not { } launched)
         {
             // As in recovery of an INTENT op with no process: the attempt stays counted and the task is updated
             // before the op leaves its live state.
@@ -128,12 +129,12 @@ public sealed class LaunchCoordinator
             _ledger.Abandon(opId);
             return new LaunchReport(false, preflight, opId, null);
         }
-        using var run = started.Run;
+        using var run = launched.Run;
         // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
-        using var stdin = started.Stdin;
+        using var stdin = launched.Stdin;
         try
         {
-            var outcome = await Supervise(task, opId, run, rules);
+            var outcome = await Supervise(task, opId, run, rules, started);
             return new LaunchReport(true, preflight, opId, outcome);
         }
         catch (Exception e)
@@ -147,9 +148,10 @@ public sealed class LaunchCoordinator
         }
     }
 
-    private async Task<Outcome> Supervise(TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules)
+    private async Task<Outcome> Supervise(TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Action<string>? started)
     {
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
+        started?.Invoke(opId);
 
         var exited = run.WaitForExit();
         // Started with the stream rather than after it: a grandchild that inherited stdout keeps it open after the
