@@ -16,6 +16,8 @@ public sealed class Daemon : IDisposable
 {
     public const int AlreadyRunning = 2;
 
+    public static readonly TimeSpan StaleRequestAge = TimeSpan.FromSeconds(60);
+
     private readonly AppServices _services;
     private readonly ConcurrentDictionary<string, RunningLaunch> _launches = new();
     private Semaphore? _lock;
@@ -47,6 +49,12 @@ public sealed class Daemon : IDisposable
         var ledger = new LaunchLedger(_store);
         new RecoveryService(_store, ledger, _tasks, _services.Lister, new OutcomeApplier(_tasks, _scheduler), _services.RulesFor)
             .Reconcile();
+        // A Resume clicked while no daemon ran is stale by now, and acting on it later would be a launch nobody asked for.
+        var expired = _queue.ExpireOlderThan(StaleRequestAge);
+        if (expired > 0)
+        {
+            _services.Log.Write($"expired {expired} stale requests");
+        }
         return true;
     }
 
