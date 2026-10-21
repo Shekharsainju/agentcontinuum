@@ -19,6 +19,8 @@ internal static class NativeMethods
     public const uint FILE_SHARE_WRITE = 0x00000002;
     public const uint OPEN_EXISTING = 3;
     public const int ERROR_INVALID_HANDLE = 6;
+    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x00001000;
+    public const uint TOKEN_QUERY = 0x0008;
     public static readonly IntPtr PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x00020002;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -196,6 +198,13 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern SafeProcessHandle OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, int dwProcessId);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool OpenProcessToken(SafeProcessHandle processHandle, uint desiredAccess, out SafeAccessTokenHandle tokenHandle);
 
     public sealed class SafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
