@@ -34,6 +34,8 @@ public sealed class LaunchCoordinator
 
     public const string LaunchFailedReason = "Launch failed";
 
+    public const string RunErrorReason = "Run error";
+
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
@@ -113,6 +115,25 @@ public sealed class LaunchCoordinator
         using var run = started.Run;
         // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
         using var stdin = started.Stdin;
+        try
+        {
+            var outcome = await Supervise(task, opId, run, rules);
+            return new LaunchReport(true, preflight, opId, outcome);
+        }
+        catch (Exception e)
+        {
+            // Left alone, the task would stay RUNNING with a live op and every resume would be refused until
+            // the daemon restarts, with nothing telling the user.
+            run.Dispose();
+            _log.Write($"launch op {opId} failed: {e.GetType().Name}");
+            EndFailedRun(task, opId);
+            return new LaunchReport(true, preflight, opId, null);
+        }
+    }
+
+    private async Task<Outcome> Supervise(TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules)
+    {
+        var taskId = task.TaskId;
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         var exited = run.WaitForExit();
@@ -140,7 +161,38 @@ public sealed class LaunchCoordinator
         {
             _notifier.Attention(taskId, flagged.Label, flagged.AttentionReason ?? "");
         }
-        return new LaunchReport(true, preflight, opId, classification.Outcome);
+        return classification.Outcome;
+    }
+
+    // The task is updated before the op leaves its live state, as in recovery. The background limit watcher may
+    // still be reading, so the writes take the same lock. The user is told even when the writes fail, since the
+    // task may then stay RUNNING until the daemon recovers it.
+    private void EndFailedRun(TaskRecord task, string opId)
+    {
+        try
+        {
+            lock (_db)
+            {
+                switch (_ledger.Get(opId)?.State)
+                {
+                    case OpState.Intent or OpState.Spawned:
+                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, RunErrorReason);
+                        _ledger.Interrupt(opId);
+                        break;
+                    case OpState.Exited:
+                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, RunErrorReason);
+                        _ledger.Classify(opId, Outcome.Ambiguous, RunErrorReason);
+                        break;
+                    default:
+                        return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            _log.Write($"launch op {opId} not closed: {e.GetType().Name}");
+        }
+        _notifier.Attention(task.TaskId, task.Label, RunErrorReason);
     }
 
     // The host ends any process it created before it throws, so a failure here means nothing ran.
