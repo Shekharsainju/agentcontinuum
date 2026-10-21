@@ -1,3 +1,6 @@
+using AgentContinuum.Core.Billing;
+using AgentContinuum.Core.Classify;
+using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Preflight;
@@ -24,7 +27,6 @@ public sealed class LaunchCoordinator
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
     private readonly IProcessHost _host;
-    private readonly IUsageLimitHandler _usageLimits;
     private readonly INotifier _notifier;
     private readonly ILog _log;
     private readonly LaunchPaths _paths;
@@ -32,6 +34,8 @@ public sealed class LaunchCoordinator
     private readonly Func<string, ClaudeRules?> _rulesFor;
     private readonly Func<TimeSpan, Task> _delay;
     private readonly TaskRepository _tasks;
+    private readonly LaunchLedger _ledger;
+    private readonly OutcomeApplier _outcomes;
 
     /// <param name="delay">Waits between checks of a running launch; for tests.</param>
     public LaunchCoordinator(
@@ -49,7 +53,6 @@ public sealed class LaunchCoordinator
         _store = store;
         _preflight = preflight;
         _host = host;
-        _usageLimits = usageLimits;
         _notifier = notifier;
         _log = log;
         _paths = paths;
@@ -57,17 +60,66 @@ public sealed class LaunchCoordinator
         _rulesFor = rulesFor ?? VersionRules.For;
         _delay = delay ?? (d => Task.Delay(d));
         _tasks = new TaskRepository(store);
+        _ledger = new LaunchLedger(store);
+        _outcomes = new OutcomeApplier(_tasks, usageLimits);
     }
 
-    public Task<LaunchReport> Launch(string taskId, LaunchKind kind, bool now)
+    public async Task<LaunchReport> Launch(string taskId, LaunchKind kind, bool now)
     {
         var preflight = _preflight.Run(taskId, now);
         if (!preflight.Pass)
         {
             FlagAttention(taskId, string.Join(", ", preflight.Reasons));
-            return Task.FromResult(new LaunchReport(false, preflight, null, null));
+            return new LaunchReport(false, preflight, null, null);
         }
-        throw new NotImplementedException();
+
+        var task = _tasks.Get(taskId)!;
+        var rules = _rulesFor(task.CliVersion);
+        var opId = _ledger.BeginIntent(taskId);
+        // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
+        using var stdin = File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)));
+        using var run = _host.Start(new LaunchSpec(task.CliPath, Args(task), task.Worktree, ChildEnv(task), stdin));
+        _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
+
+        await ReadStream(run, opId, rules);
+        var exitCode = await run.WaitForExit();
+        _ledger.MarkExited(opId, exitCode);
+
+        var classification = RunClassifier.Classify(
+            rules, task.SessionId, StreamEventLog.ForOp(_store, opId), HookRecorder.ForOp(_store, opId), exitCode);
+        _outcomes.Apply(taskId, classification);
+        _ledger.Classify(opId, classification.Outcome, classification.Reason);
+        return new LaunchReport(true, preflight, opId, classification.Outcome);
+    }
+
+    private static string[] Args(TaskRecord task)
+    {
+        List<string> args =
+        [
+            "-p", "--session-id", task.SessionId.ToString("D"), "--output-format", "stream-json", "--verbose",
+            "--permission-mode", task.PermissionMode,
+        ];
+        if (task.AllowedTools.Length > 0)
+        {
+            args.AddRange(["--allowedTools", string.Join(',', task.AllowedTools)]);
+        }
+        return [.. args];
+    }
+
+    private IReadOnlyDictionary<string, string> ChildEnv(TaskRecord task) => ChildEnvironment.Build(
+        _preflightHost.ParentEnv, Path.GetDirectoryName(task.CliPath) ?? "", Path.GetDirectoryName(_preflightHost.GitExe) ?? "");
+
+    // Only the filtered view of each line is kept; the raw line never leaves this method.
+    private async Task ReadStream(IHostedRun run, string opId, ClaudeRules? rules)
+    {
+        var filter = rules is null ? null : new EventFilter(rules);
+        await foreach (var line in run.StdoutLines.ConfigureAwait(false))
+        {
+            if (filter?.Accept(line) is { } filtered)
+            {
+                StreamEventLog.Append(_store, opId, filtered);
+            }
+        }
     }
 
     private void FlagAttention(string taskId, string reason)
