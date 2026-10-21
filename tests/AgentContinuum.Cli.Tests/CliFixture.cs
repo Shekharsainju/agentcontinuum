@@ -54,6 +54,14 @@ public sealed class CliFixture : IDisposable
 
     public string Output => Out.ToString();
 
+    public string Session => F.Task.SessionId.ToString("D");
+
+    public string InitLine() =>
+        $$"""{"type":"system","subtype":"init","session_id":"{{Session}}","apiKeySource":"none"}""";
+
+    public string SuccessLine() =>
+        $$"""{"type":"result","subtype":"success","session_id":"{{Session}}","is_error":false,"terminal_reason":"completed"}""";
+
     public void Dispose() => F.Dispose();
 
     public sealed class RecordingNotifier : INotifier
