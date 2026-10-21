@@ -1,13 +1,10 @@
 namespace AgentContinuum.Cli;
 
-public sealed record AppPaths(string Root)
+public sealed record AppPaths(string Database, string LaunchRoot, string LogFile)
 {
-    public string Database => Path.Combine(Root, "state", "ac.db");
-
-    public string LaunchRoot => Path.Combine(Root, "launch");
-
-    public string LogFile => Path.Combine(Root, "logs", "ac.log");
+    public static AppPaths ForRoot(string root) =>
+        new(Path.Combine(root, "state", "ac.db"), Path.Combine(root, "launch"), Path.Combine(root, "logs", "ac.log"));
 
     public static AppPaths ForCurrentUser() =>
-        new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentContinuum"));
+        ForRoot(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentContinuum"));
 }
