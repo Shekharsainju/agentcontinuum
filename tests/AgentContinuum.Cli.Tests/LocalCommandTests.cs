@@ -27,6 +27,35 @@ public sealed class LocalCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AcceptWorkspace_TakesANewBaseline()
+    {
+        _c.F.Task = _c.F.Task with { BaselineFingerprint = new string('0', 64) };
+        var services = _c.Services();
+        _c.F.Repo.Write("edited-by-you.txt", "a change made by hand");
+
+        var exit = await App.Run(["accept-workspace", TaskId], services);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("baseline taken", _c.Output.Trim());
+        Assert.Equal(
+            Core.Workspace.WorkspaceFingerprint.Compute(_c.F.Repo.Path, GitRepo.GitExe).Hash,
+            _c.F.Tasks.Get(TaskId)!.BaselineFingerprint);
+    }
+
+    [Fact]
+    public async Task AcceptWorkspace_RefusedWhileALaunchIsLive()
+    {
+        var services = _c.Services();
+        _c.F.Ledger.BeginIntent(TaskId);
+
+        var exit = await App.Run(["accept-workspace", TaskId], services);
+
+        Assert.Equal(1, exit);
+        Assert.Equal("error: task has a live launch", _c.Output.Trim());
+        Assert.Null(_c.F.Tasks.Get(TaskId)!.BaselineFingerprint);
+    }
+
+    [Fact]
     public async Task PinCli_RefusesANonExe()
     {
         var services = _c.Services();
