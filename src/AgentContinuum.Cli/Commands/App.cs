@@ -12,6 +12,8 @@ public static class App
                 return await RunDaemon(services);
             case ["task", "add", .. var addArgs]:
                 return TaskCommands.Add(services, addArgs);
+            case ["pin-cli", var taskId, .. var pinArgs]:
+                return LocalCommands.PinCli(services, taskId, pinArgs);
             case ["status"]:
                 return StatusCommand.Run(services);
             case ["task", "start", var taskId]:
