@@ -6,8 +6,25 @@ public static class App
 
     public static async Task<int> Run(string[] args, AppServices services)
     {
-        await Task.CompletedTask;
-        return Usage(services);
+        switch (args)
+        {
+            case ["daemon"]:
+                return await RunDaemon(services);
+            default:
+                return Usage(services);
+        }
+    }
+
+    private static async Task<int> RunDaemon(AppServices services)
+    {
+        using var stop = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            stop.Cancel();
+        };
+        using var daemon = new Daemon(services);
+        return await daemon.Run(stop.Token);
     }
 
     private static int Usage(AppServices services)
