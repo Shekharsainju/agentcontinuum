@@ -88,7 +88,12 @@ public sealed class LaunchCoordinator
         var preflight = _preflight.Run(taskId, now);
         if (!preflight.Pass)
         {
-            FlagAttention(taskId, string.Join(", ", preflight.Reasons));
+            // A task that cannot launch from its state is revoked, finished or mid-launch. Moving it to attention
+            // would make it resumable again, so it is left as it is.
+            if (!preflight.Reasons.Contains(PreflightReasons.AdmissionState))
+            {
+                FlagAttention(taskId, string.Join(", ", preflight.Reasons));
+            }
             return new LaunchReport(false, preflight, null, null);
         }
 
