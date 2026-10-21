@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Events;
@@ -80,11 +81,14 @@ public sealed class LaunchCoordinator
         var task = _tasks.Get(taskId)!;
         var rules = _rulesFor(task.CliVersion);
         var opId = _ledger.BeginIntent(taskId);
+        // Without a verified limit signal the hook could not be classified, so it is not installed.
+        var settingsPath = rules?.Limit is { } limit ? WriteSettings(opId, limit) : null;
         // The host feeds stdin in the background and leaves the source open, so it is closed here after the run.
         using Stream stdin = kind == LaunchKind.First
             ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
             : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
-        using var run = _host.Start(new LaunchSpec(task.CliPath, Args(task, kind), task.Worktree, ChildEnv(task), stdin));
+        using var run = _host.Start(
+            new LaunchSpec(task.CliPath, Args(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         await ReadStream(run, opId, rules);
@@ -98,7 +102,20 @@ public sealed class LaunchCoordinator
         return new LaunchReport(true, preflight, opId, classification.Outcome);
     }
 
-    private static string[] Args(TaskRecord task, LaunchKind kind)
+    private string WriteSettings(string opId, LimitSignalRule limit)
+    {
+        var dir = Directory.CreateDirectory(Path.Combine(_paths.LaunchRoot, opId)).FullName;
+        var path = Path.Combine(dir, "settings.json");
+        var command = new JsonObject { ["type"] = "command", ["command"] = $"\"{_paths.AcExe}\" hook stop-failure --op {opId}" };
+        var settings = new JsonObject
+        {
+            ["hooks"] = new JsonObject { [limit.Hook] = new JsonArray(new JsonObject { ["hooks"] = new JsonArray(command) }) },
+        };
+        File.WriteAllText(path, settings.ToJsonString());
+        return path;
+    }
+
+    private static string[] Args(TaskRecord task, LaunchKind kind, string? settingsPath)
     {
         List<string> args =
         [
@@ -109,6 +126,10 @@ public sealed class LaunchCoordinator
         if (task.AllowedTools.Length > 0)
         {
             args.AddRange(["--allowedTools", string.Join(',', task.AllowedTools)]);
+        }
+        if (settingsPath is not null)
+        {
+            args.AddRange(["--settings", settingsPath]);
         }
         return [.. args];
     }
