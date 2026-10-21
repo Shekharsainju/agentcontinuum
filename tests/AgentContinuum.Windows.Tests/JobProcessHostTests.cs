@@ -93,6 +93,19 @@ public sealed class JobProcessHostTests : IDisposable
     }
 
     [Fact]
+    public async Task DisposeWhileWaitingForExit_WaitCompletes()
+    {
+        _launch.Scenario("""{ "lingerSeconds": 30 }""");
+        var run = new JobProcessHost().Start(_launch.Spec());
+        var exit = run.WaitForExit();
+
+        run.Dispose();
+
+        await exit.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(exit.IsCompletedSuccessfully);
+    }
+
+    [Fact]
     public async Task Env_IsExactlyLaunchSpecEnv()
     {
         _launch.Scenario("""{ "exitCode": 0 }""");
