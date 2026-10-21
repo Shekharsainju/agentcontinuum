@@ -20,7 +20,7 @@ public sealed class FakeClaudeTests : IDisposable
     private static string[] HeadlessArgs(string sessionFlag = "--session-id") =>
     [
         "-p", sessionFlag, Session, "--output-format", "stream-json", "--verbose",
-        "--permission-mode", "acceptEdits", "--allowedTools", "Read,Edit",
+        "--permission-mode", "acceptEdits", "--allowedTools", "Read", "Bash(git diff:*,stat)",
     ];
 
     private void Scenario(string json) => File.WriteAllText(_dir.File(".fake-claude.json"), json);

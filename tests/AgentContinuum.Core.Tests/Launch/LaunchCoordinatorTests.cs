@@ -152,6 +152,16 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First, null));
     }
 
+    [Fact]
+    public void BuildArgs_OneArgumentPerAllowedToolRule()
+    {
+        var task = _f.Task with { AllowedTools = ["Read", "Bash(git diff:*,stat)"] };
+
+        var args = LaunchCoordinator.BuildArgs(task, LaunchKind.First, null);
+
+        Assert.Equal(["--allowedTools", "Read", "Bash(git diff:*,stat)"], args[^3..]);
+    }
+
     [Theory]
     [InlineData(false, OpState.Interrupted)]
     [InlineData(true, OpState.Classified)]
@@ -201,7 +211,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal(_f.Task.CliPath, spec.Exe);
         Assert.Equal(
             ["-p", "--session-id", Session, "--output-format", "stream-json", "--verbose",
-                "--permission-mode", "acceptEdits", "--allowedTools", "Read,Edit"],
+                "--permission-mode", "acceptEdits", "--allowedTools", "Read", "Edit"],
             spec.Args);
         Assert.Equal(_f.Repo.Path, spec.WorkingDir);
         Assert.DoesNotContain("ANTHROPIC_API_KEY", spec.Env.Keys);
