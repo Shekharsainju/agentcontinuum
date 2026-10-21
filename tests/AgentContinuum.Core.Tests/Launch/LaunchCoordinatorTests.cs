@@ -1,3 +1,6 @@
+using System.Text;
+using System.Text.Json;
+using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Launch;
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
@@ -33,7 +36,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
             new ResetScheduler(_f.Tasks, _f.Clock, _log),
             _notifier,
             _log,
-            new LaunchPaths(@"C:\Program Files\AgentContinuum\ac.exe", _f.Outside("launch")),
+            new LaunchPaths(AcExe, _f.Outside("launch")),
             preflightHost,
             rulesFor: _ => _rules,
             delay: async d =>
@@ -162,6 +165,47 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal(TaskState.NeedsAttention, task.State);
         Assert.Equal("Billing unverified", task.AttentionReason);
         Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason billing mismatch ok True error 0");
+    }
+
+    private const long ResetEpoch = 1_792_500_000;
+
+    private const string AcExe = @"C:\Program Files\AgentContinuum\ac.exe";
+
+    private static readonly LimitSignalRule Limit = new("StopFailure", "error_type", ["rate_limit"], "resets_at", "unix_seconds");
+
+    // Records the hook the way `ac hook stop-failure` would, while the launch's op is live.
+    private void FireLimitHookOnStart() => _host.OnStart = _ =>
+    {
+        var opId = _f.Ledger.Live(TaskId)!.OpId;
+        var payload = $$"""
+            {"hook_event_name":"StopFailure","session_id":"{{Session}}","error_type":"rate_limit","resets_at":{{ResetEpoch}},"message":"SENTINEL-hook"}
+            """;
+        HookRecorder.Record(_f.Store, opId, new MemoryStream(Encoding.UTF8.GetBytes(payload)), _rules);
+    };
+
+    [Fact]
+    public async Task UsageLimit_SchedulesReset()
+    {
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = 1;
+        _host.Run.Lines.Add(InitLine());
+        FireLimitHookOnStart();
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.Equal(Outcome.UsageLimit, report.Outcome);
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.WaitingForReset, task.State);
+        Assert.Equal(ResetEpoch, task.ResetExpectedAtEpoch);
+        Assert.Equal(ResetEpoch + ResetScheduler.ResetMarginSeconds, task.AttemptPermittedAtEpoch);
+
+        var settingsPath = Path.Combine(_f.Outside("launch"), report.OpId!, "settings.json");
+        var args = _host.Started.Single().Args;
+        Assert.Equal(["--settings", settingsPath], args[^2..]);
+        using var settings = JsonDocument.Parse(File.ReadAllText(settingsPath));
+        var command = settings.RootElement.GetProperty("hooks").GetProperty("StopFailure")[0].GetProperty("hooks")[0];
+        Assert.Equal("command", command.GetProperty("type").GetString());
+        Assert.Equal($"\"{AcExe}\" hook stop-failure --op {report.OpId}", command.GetProperty("command").GetString());
     }
 
     private sealed class RecordingNotifier : INotifier
