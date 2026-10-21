@@ -147,12 +147,15 @@ public sealed class LaunchCoordinator
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
 
         var exited = run.WaitForExit();
+        // Started with the stream rather than after it: a grandchild that inherited stdout keeps it open after the
+        // main process exits, and only killing the job then ends the stream.
+        var emptied = EmptyJobAfterExit(run, opId, exited);
         var watch = rules?.Limit is { } watched ? WatchForLimit(run, opId, task.SessionId, watched, exited) : Task.CompletedTask;
         await ReadStream(run, opId, rules);
         await watch;
-        var exitCode = await run.WaitForExit();
+        var exitCode = await exited;
         _ledger.MarkExited(opId, exitCode);
-        var baselineTaken = await TakeBaseline(run, opId, task);
+        var baselineTaken = await TakeBaseline(emptied, task);
 
         var classification = RunClassifier.Classify(
             rules, task.SessionId, StreamEventLog.ForOp(_store, opId), HookRecorder.ForOp(_store, opId), exitCode);
@@ -319,15 +322,22 @@ public sealed class LaunchCoordinator
     }
 
     // A child can outlive the main process and keep writing, so the snapshot waits for the job to empty.
-    private async Task<bool> TakeBaseline(IHostedRun run, string opId, TaskRecord task)
+    private async Task<bool> EmptyJobAfterExit(IHostedRun run, string opId, Task exited)
     {
-        if (!await WaitForEmptyJob(run).ConfigureAwait(false))
+        await exited.ConfigureAwait(false);
+        if (await WaitForEmptyJob(run).ConfigureAwait(false))
         {
-            Kill(run, opId, "processes after exit");
-            if (!await WaitForEmptyJob(run).ConfigureAwait(false))
-            {
-                return false;
-            }
+            return true;
+        }
+        Kill(run, opId, "processes after exit");
+        return await WaitForEmptyJob(run).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TakeBaseline(Task<bool> emptied, TaskRecord task)
+    {
+        if (!await emptied.ConfigureAwait(false))
+        {
+            return false;
         }
         var result = WorkspaceFingerprint.Compute(task.Worktree, _preflightHost.GitExe, _preflightHost.FingerprintMaxFiles);
         if (result is not { Hash: { } hash, Incomplete: false })
