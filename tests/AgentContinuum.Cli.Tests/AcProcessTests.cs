@@ -37,6 +37,15 @@ public sealed class AcProcessTests : IDisposable
     }
 
     [Fact]
+    public void NoDaemon_Exits3Within5Seconds()
+    {
+        var (exit, stdout, elapsed) = Ac("resume", "t1");
+
+        Assert.Equal((3, "daemon not running"), (exit, stdout));
+        Assert.True(elapsed < TimeSpan.FromSeconds(5), $"took {elapsed.TotalSeconds:0.0} s");
+    }
+
+    [Fact]
     public void State_LivesUnderLocalAppDataFromTheEnvironment()
     {
         var (exit, stdout, _) = Ac("status");
