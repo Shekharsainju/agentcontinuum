@@ -27,6 +27,7 @@ public sealed class PreflightRunner
             new WorkspaceCheck(host),
             new PermissionCheck(host),
             new BillingCheck(billing, host),
+            new ControllerCheck(store),
         ];
     }
 
