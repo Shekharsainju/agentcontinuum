@@ -448,6 +448,24 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task GrandchildHoldsStdout_KillFails_JobClosedNeedsAttention()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        _host.Run.GrandchildHoldsStdout = true;
+        _host.Run.KillResult = new KillResult(false, 5);
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(_host.Run.Disposed);
+        Assert.Contains(_log.Messages, m => m == $"close op {report.OpId} reason processes after exit");
+        Assert.Null(_f.Ledger.Live(TaskId));
+        var task = _f.Tasks.Get(TaskId)!;
+        Assert.Equal(TaskState.NeedsAttention, task.State);
+        Assert.Equal("Processes outlived the run", task.AttentionReason);
+        Assert.Equal([(TaskId, "sample", "Processes outlived the run")], _notifier.Attentions);
+    }
+
+    [Fact]
     public async Task AttemptsExhausted_NeedsAttention()
     {
         _f.Task = _f.Task with { MaxAttempts = 1 };
