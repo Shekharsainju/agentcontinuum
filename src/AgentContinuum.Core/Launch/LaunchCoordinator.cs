@@ -120,13 +120,28 @@ public sealed class LaunchCoordinator
     private async Task ReadStream(IHostedRun run, string opId, ClaudeRules? rules)
     {
         var filter = rules is null ? null : new EventFilter(rules);
+        var billing = FirstEventStatus.Pending;
         await foreach (var line in run.StdoutLines.ConfigureAwait(false))
         {
-            if (filter?.Accept(line) is { } filtered)
+            if (filter?.Accept(line) is not { } filtered)
             {
-                StreamEventLog.Append(_store, opId, filtered);
+                continue;
             }
+            StreamEventLog.Append(_store, opId, filtered);
+            var observed = FirstEventCheck.Observe(billing, filtered, rules);
+            // Killed on the first sign, before more work can run on a route that may not be the subscription.
+            if (observed == FirstEventStatus.Mismatch && billing != FirstEventStatus.Mismatch)
+            {
+                Kill(run, opId, "billing mismatch");
+            }
+            billing = observed;
         }
+    }
+
+    private void Kill(IHostedRun run, string opId, string reason)
+    {
+        var result = run.Terminate();
+        _log.Write($"kill op {opId} reason {reason} ok {result.Ok} error {result.Win32Error}");
     }
 
     private void FlagAttention(string taskId, string reason)
