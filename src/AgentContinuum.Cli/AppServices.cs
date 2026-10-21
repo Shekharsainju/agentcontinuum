@@ -60,7 +60,8 @@ public sealed record AppServices(
             Console.Out,
             Console.OpenStandardInput(),
             UserDaemonLock,
-            ClientWait: TimeSpan.FromSeconds(5),
+            // Start-up and the request write come out of the same 5 s the user is promised.
+            ClientWait: TimeSpan.FromSeconds(4),
             ReplyWait: TimeSpan.FromMinutes(2),
             RequestPoll: TimeSpan.FromSeconds(1),
             TickInterval: TimeSpan.FromSeconds(30),
