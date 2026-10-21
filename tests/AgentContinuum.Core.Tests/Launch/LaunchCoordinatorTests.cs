@@ -208,6 +208,22 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal($"\"{AcExe}\" hook stop-failure --op {report.OpId}", command.GetProperty("command").GetString());
     }
 
+    [Fact]
+    public async Task VerifiedLimit_StillAlive10s_Terminated()
+    {
+        _rules = _rules! with { Limit = Limit };
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine());
+        FireLimitHookOnStart();
+
+        var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, _host.Run.Kills);
+        Assert.True(_delays.Aggregate(TimeSpan.Zero, (sum, d) => sum + d) <= TimeSpan.FromSeconds(10));
+        Assert.Equal(Outcome.UsageLimit, report.Outcome);
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason limit signal ok True error 0");
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
