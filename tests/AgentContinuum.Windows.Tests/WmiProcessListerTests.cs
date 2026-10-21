@@ -42,4 +42,26 @@ public sealed class WmiProcessListerTests : IDisposable
         Assert.Null(fake.CommandLine);
         Assert.DoesNotContain(processes, p => p.Pid == Environment.ProcessId);
     }
+
+    [Fact]
+    public void Lister_StalledListing_FailsInsteadOfHanging()
+    {
+        using var stall = new ManualResetEventSlim();
+        var lister = new WmiProcessLister(() => [], timeout: TimeSpan.FromMilliseconds(200), ownerOf: _ =>
+        {
+            stall.Wait();
+            return null;
+        });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            Assert.Throws<ProcessListException>(lister.ListOwnProcesses);
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            stall.Set();
+        }
+    }
 }
