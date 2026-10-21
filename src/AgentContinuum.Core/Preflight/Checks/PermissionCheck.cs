@@ -1,13 +1,12 @@
 using System.Text.Json;
 using AgentContinuum.Core.Billing;
+using AgentContinuum.Core.Model;
 
 namespace AgentContinuum.Core.Preflight.Checks;
 
 internal sealed class PermissionCheck : IPreflightCheck
 {
     private const string Bypass = "bypassPermissions";
-
-    private static readonly string[] AllowedModes = ["default", "acceptEdits", "plan"];
 
     private readonly PreflightHost _host;
 
@@ -18,7 +17,7 @@ internal sealed class PermissionCheck : IPreflightCheck
 
     public IEnumerable<string> Reasons(PreflightContext ctx)
     {
-        if (!AllowedModes.Contains(ctx.Task.PermissionMode, StringComparer.Ordinal))
+        if (!LaunchPolicy.IsAllowedMode(ctx.Task.PermissionMode))
         {
             yield return $"{PreflightReasons.PermissionUnsafe}: policy mode not allowed";
         }

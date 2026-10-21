@@ -5,9 +5,6 @@ namespace AgentContinuum.Core.Preflight.Checks;
 
 internal sealed class AdmissionCheck : IPreflightCheck
 {
-    private static readonly TaskState[] Launchable =
-        [TaskState.Queued, TaskState.WaitingForReset, TaskState.ResumeOffered, TaskState.NeedsAttention];
-
     private readonly LaunchLedger _ledger;
 
     public AdmissionCheck(LaunchLedger ledger)
@@ -19,7 +16,7 @@ internal sealed class AdmissionCheck : IPreflightCheck
     {
         var task = ctx.Task;
         // A live op means an earlier launch is not yet recovered; reporting it beats BeginIntent throwing on the index.
-        if (!Launchable.Contains(task.State) || _ledger.Live(task.TaskId) is not null)
+        if (!LaunchPolicy.IsLaunchable(task.State) || _ledger.Live(task.TaskId) is not null)
         {
             yield return PreflightReasons.AdmissionState;
         }
