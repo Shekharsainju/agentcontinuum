@@ -275,19 +275,30 @@ internal sealed class JobHostedRun : IHostedRun
     private Task<int> WaitAsync()
     {
         var exited = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // The run can be disposed while the process is still alive. The reference keeps the handle open for the
+        // wait and the callback, which would otherwise throw on a thread-pool thread and end the daemon.
+        var added = false;
+        _process.DangerousAddRef(ref added);
         var waitHandle = new ProcessWaitHandle(_process);
         RegisteredWaitHandle? registration = null;
         registration = ThreadPool.RegisterWaitForSingleObject(waitHandle, (_, _) =>
         {
             registration?.Unregister(null);
             waitHandle.Dispose();
-            if (GetExitCodeProcess(_process, out var code))
+            try
             {
-                exited.SetResult(unchecked((int)code));
+                if (GetExitCodeProcess(_process, out var code))
+                {
+                    exited.SetResult(unchecked((int)code));
+                }
+                else
+                {
+                    exited.SetException(new Win32Exception(Marshal.GetLastWin32Error()));
+                }
             }
-            else
+            finally
             {
-                exited.SetException(new Win32Exception(Marshal.GetLastWin32Error()));
+                _process.DangerousRelease();
             }
         }, null, Timeout.Infinite, executeOnlyOnce: true);
         return exited.Task;
