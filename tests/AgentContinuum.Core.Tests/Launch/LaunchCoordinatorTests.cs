@@ -9,6 +9,7 @@ using AgentContinuum.Core.Rules;
 using AgentContinuum.Core.Schedule;
 using AgentContinuum.Core.State;
 using AgentContinuum.Core.Tests.Preflight;
+using AgentContinuum.Core.Workspace;
 
 namespace AgentContinuum.Core.Tests.Launch;
 
@@ -222,6 +223,27 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.True(_delays.Aggregate(TimeSpan.Zero, (sum, d) => sum + d) <= TimeSpan.FromSeconds(10));
         Assert.Equal(Outcome.UsageLimit, report.Outcome);
         Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason limit signal ok True error 0");
+    }
+
+    [Fact]
+    public async Task Baseline_NotTakenWhileProcessesActive()
+    {
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+        var active = new Queue<int>([2, 1]);
+        _host.Run.Active = () =>
+        {
+            var count = active.Count > 0 ? active.Dequeue() : 0;
+            if (count > 0)
+            {
+                _f.Repo.Write($"late-{count}.txt", "written by a child after the main process exited");
+            }
+            return count;
+        };
+
+        await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.Equal(3, _host.Run.ActiveQueries);
+        Assert.Equal(WorkspaceFingerprint.Compute(_f.Repo.Path, GitRepo.GitExe).Hash, _f.Tasks.Get(TaskId)!.BaselineFingerprint);
     }
 
     private sealed class RecordingNotifier : INotifier
