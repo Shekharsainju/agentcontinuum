@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
 
 namespace AgentContinuum.Core.Preflight.Checks;
@@ -16,13 +17,14 @@ internal sealed class BinaryCheck : IPreflightCheck
 
     public IEnumerable<string> Reasons(PreflightContext ctx)
     {
-        var problem = Problem(ctx);
+        // Only a binary whose hash matched is run, so pre-flight never executes an unpinned CLI.
+        var problem = ctx.CliPinProblem ?? (ReportsPinnedVersion(ctx) ? null : "version differs");
         return problem is null ? [] : [$"{PreflightReasons.CliChanged}: {problem}, re-pin with ac pin-cli"];
     }
 
-    private string? Problem(PreflightContext ctx)
+    /// <summary>Null when <see cref="TaskRecord.CliPath"/> is the pinned file; otherwise a detail naming no content.</summary>
+    public static string? PinProblem(TaskRecord task)
     {
-        var task = ctx.Task;
         if (!Path.IsPathFullyQualified(task.CliPath) || !File.Exists(task.CliPath))
         {
             return "binary missing";
@@ -31,8 +33,7 @@ internal sealed class BinaryCheck : IPreflightCheck
         {
             return "binary hash differs";
         }
-        // Only a binary whose hash matched is run, so pre-flight never executes an unpinned CLI.
-        return ReportsPinnedVersion(ctx) ? null : "version differs";
+        return null;
     }
 
     private bool ReportsPinnedVersion(PreflightContext ctx)

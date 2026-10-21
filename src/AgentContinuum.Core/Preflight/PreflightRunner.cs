@@ -36,7 +36,7 @@ public sealed class PreflightRunner
             return new PreflightResult(false, [PreflightReasons.AdmissionState]);
         }
 
-        var ctx = new PreflightContext(task, now, _clock.UtcNow, BuildChildEnv(task.CliPath));
+        var ctx = new PreflightContext(task, now, _clock.UtcNow, BuildChildEnv(task.CliPath), BinaryCheck.PinProblem(task));
         var reasons = _checks.SelectMany(check => check.Reasons(ctx)).Distinct().ToList();
         return new PreflightResult(reasons.Count == 0, reasons);
     }
