@@ -46,6 +46,16 @@ public sealed class AcProcessTests : IDisposable
     }
 
     [Fact]
+    public void Hook_SetupFails_StillExits0Silently()
+    {
+        File.WriteAllText(Path.Combine(_localAppData.Path, "AgentContinuum"), "a file where the state folder should be");
+
+        var (exit, stdout, _) = Ac("hook", "stop-failure", "--op", "0123456789abcdef0123456789abcdef");
+
+        Assert.Equal((0, ""), (exit, stdout));
+    }
+
+    [Fact]
     public void State_LivesUnderLocalAppDataFromTheEnvironment()
     {
         var (exit, stdout, _) = Ac("status");
