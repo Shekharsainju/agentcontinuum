@@ -56,6 +56,19 @@ public sealed class LocalCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AttestOverageOff_RecordsNowValidFor30Days()
+    {
+        var services = _c.Services();
+        _c.F.Clock.Advance(TimeSpan.FromDays(3));
+
+        var exit = await App.Run(["attest-overage-off"], services);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("overage off attested, valid until 2026-11-22 12:00 UTC", _c.Output.Trim());
+        Assert.Equal(_c.F.Clock.UtcNow, new Core.State.Attestations(_c.F.Store).Latest(Core.State.Attestations.OverageOff));
+    }
+
+    [Fact]
     public async Task PinCli_RefusesANonExe()
     {
         var services = _c.Services();
