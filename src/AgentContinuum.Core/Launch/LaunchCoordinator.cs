@@ -94,7 +94,9 @@ public sealed class LaunchCoordinator
     }
 
     /// <param name="started">Called with the op ID once the process is running, long before the run ends.</param>
-    public async Task<LaunchReport> Launch(string taskId, LaunchKind kind, bool now, Action<string>? started = null)
+    /// <param name="stop">Kills the run when cancelled. A task moved out of RUNNING meanwhile keeps its new state.</param>
+    public async Task<LaunchReport> Launch(
+        string taskId, LaunchKind kind, bool now, Action<string>? started = null, CancellationToken stop = default)
     {
         var preflight = _preflight.Run(taskId, now);
         if (!preflight.Pass)
@@ -134,7 +136,7 @@ public sealed class LaunchCoordinator
         using var stdin = launched.Stdin;
         try
         {
-            var outcome = await Supervise(task, opId, run, rules, started);
+            var outcome = await Supervise(task, opId, run, rules, started, stop);
             return new LaunchReport(true, preflight, opId, outcome);
         }
         catch (Exception e)
@@ -148,9 +150,11 @@ public sealed class LaunchCoordinator
         }
     }
 
-    private async Task<Outcome> Supervise(TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Action<string>? started)
+    private async Task<Outcome> Supervise(
+        TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Action<string>? started, CancellationToken stop)
     {
         _ledger.MarkSpawned(opId, run.Pid, run.CreatedAtFileTime, task.SessionId);
+        using var stopping = stop.Register(() => Kill(run, opId, "stopped"));
         started?.Invoke(opId);
 
         var exited = run.WaitForExit();
@@ -188,9 +192,15 @@ public sealed class LaunchCoordinator
 
         var classification = RunClassifier.Classify(
             rules, task.SessionId, StreamEventLog.ForOp(_store, opId), HookRecorder.ForOp(_store, opId), exitCode);
+        // A task revoked during the run keeps that state, since any outcome would make it launchable again.
+        var revoked = _tasks.Get(taskId) is not { State: TaskState.Running };
         // Without a fresh baseline the next pre-flight would compare against a stale one or none, so a task that
         // could launch again goes to attention instead, in the same single write the outcome would have made.
-        if (baselineTaken || classification.Outcome == Outcome.Completed)
+        if (revoked)
+        {
+            _log.Write($"launch op {opId} ended after its task left RUNNING; outcome not applied");
+        }
+        else if (baselineTaken || classification.Outcome == Outcome.Completed)
         {
             _outcomes.Apply(taskId, classification);
         }
@@ -240,26 +250,24 @@ public sealed class LaunchCoordinator
     // task may then stay RUNNING until the daemon recovers it.
     private void EndFailedRun(TaskRecord task, string opId, string reason)
     {
+        var flagged = true;
         try
         {
             lock (_db)
             {
-                switch (_ledger.Get(opId)?.State)
+                var state = _ledger.Get(opId)?.State;
+                if (state is not (OpState.Intent or OpState.Spawned or OpState.Exited))
                 {
-                    case OpState.Intent or OpState.Spawned:
-                        _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
-                        _ledger.Interrupt(opId);
-                        break;
-                    case OpState.Exited:
-                        // The outcome may already be applied, and flagging a completed task would make it launchable.
-                        if (_tasks.Get(task.TaskId) is { State: TaskState.Running })
-                        {
-                            _tasks.SetState(task.TaskId, TaskState.NeedsAttention, reason);
-                        }
-                        _ledger.Classify(opId, Outcome.Ambiguous, reason);
-                        break;
-                    default:
-                        return;
+                    return;
+                }
+                flagged = FlagIfStillRunning(task.TaskId, reason);
+                if (state == OpState.Exited)
+                {
+                    _ledger.Classify(opId, Outcome.Ambiguous, reason);
+                }
+                else
+                {
+                    _ledger.Interrupt(opId);
                 }
             }
         }
@@ -267,7 +275,22 @@ public sealed class LaunchCoordinator
         {
             _log.Write($"launch op {opId} not closed: {e.GetType().Name}");
         }
-        _notifier.Attention(task.TaskId, task.Label, reason);
+        if (flagged)
+        {
+            _notifier.Attention(task.TaskId, task.Label, reason);
+        }
+    }
+
+    // A task moved during the run, by a revoke or by its outcome already being applied, keeps that state: flagging
+    // it would make a revoked or completed task launchable again.
+    private bool FlagIfStillRunning(string taskId, string reason)
+    {
+        if (_tasks.Get(taskId) is not { State: TaskState.Running })
+        {
+            return false;
+        }
+        _tasks.SetState(taskId, TaskState.NeedsAttention, reason);
+        return true;
     }
 
     // The host ends any process it created before it throws, so a failure here means nothing ran.
