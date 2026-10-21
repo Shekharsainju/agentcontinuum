@@ -9,6 +9,7 @@ using AgentContinuum.Core.Preflight;
 using AgentContinuum.Core.Rules;
 using AgentContinuum.Core.Schedule;
 using AgentContinuum.Core.State;
+using AgentContinuum.Core.Workspace;
 
 namespace AgentContinuum.Core.Launch;
 
@@ -32,6 +33,8 @@ public sealed class LaunchCoordinator
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
+
+    private static readonly TimeSpan EmptyJobPollInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly StateStore _store;
     private readonly PreflightRunner _preflight;
@@ -104,6 +107,7 @@ public sealed class LaunchCoordinator
         await watch;
         var exitCode = await run.WaitForExit();
         _ledger.MarkExited(opId, exitCode);
+        await TakeBaseline(run, task);
 
         var classification = RunClassifier.Classify(
             rules, task.SessionId, StreamEventLog.ForOp(_store, opId), HookRecorder.ForOp(_store, opId), exitCode);
@@ -193,6 +197,20 @@ public sealed class LaunchCoordinator
                 return;
             }
             await _delay(HookPollInterval).ConfigureAwait(false);
+        }
+    }
+
+    // A child can outlive the main process and keep writing, so the snapshot waits for the job to empty.
+    private async Task TakeBaseline(IHostedRun run, TaskRecord task)
+    {
+        while (run.ActiveProcesses() > 0)
+        {
+            await _delay(EmptyJobPollInterval).ConfigureAwait(false);
+        }
+        var result = WorkspaceFingerprint.Compute(task.Worktree, _preflightHost.GitExe, _preflightHost.FingerprintMaxFiles);
+        if (result is { Hash: { } hash, Incomplete: false })
+        {
+            _tasks.SetBaseline(task.TaskId, hash);
         }
     }
 
