@@ -126,6 +126,28 @@ public sealed class LaunchCoordinatorTests : IDisposable
             _host.StdinTexts);
     }
 
+    [Theory]
+    [InlineData("default", true)]
+    [InlineData("acceptEdits", true)]
+    [InlineData("plan", true)]
+    [InlineData("bypassPermissions", false)]
+    [InlineData("dontAsk", false)]
+    [InlineData("auto", false)]
+    public async Task Args_NeverContainBypass(string mode, bool launches)
+    {
+        _f.Task = _f.Task with { PermissionMode = mode };
+        _host.Run.Lines.AddRange([InitLine(), SuccessLine()]);
+
+        await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.Equal(launches, _host.Started.Count > 0);
+        Assert.All(_host.Started, spec =>
+        {
+            Assert.DoesNotContain("--dangerously-skip-permissions", spec.Args);
+            Assert.DoesNotContain(spec.Args, arg => arg.Contains("bypassPermissions", StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
     private sealed class RecordingNotifier : INotifier
     {
         public List<Offer> Offers { get; } = [];
