@@ -282,6 +282,31 @@ public sealed class LaunchCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task RevokedAndStopped_KilledAndStaysRevoked()
+    {
+        _host.Run.ExitCode = null;
+        _host.Run.Lines.Add(InitLine());
+        using var stop = new CancellationTokenSource();
+
+        var report = await Coordinator().Launch(
+            TaskId,
+            LaunchKind.First,
+            now: false,
+            started: _ =>
+            {
+                _f.Tasks.SetState(TaskId, TaskState.Revoked, null);
+                stop.Cancel();
+            },
+            stop: stop.Token).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, _host.Run.Kills);
+        Assert.Contains(_log.Messages, m => m == $"kill op {report.OpId} reason stopped ok True error 0");
+        Assert.Null(_f.Ledger.Live(TaskId));
+        Assert.Equal(TaskState.Revoked, _f.Tasks.Get(TaskId)!.State);
+        Assert.Empty(_notifier.Attentions);
+    }
+
+    [Fact]
     public async Task Started_NotCalledWhenRefused()
     {
         _f.Lister.Throw = new ProcessListException("enumeration failed");
