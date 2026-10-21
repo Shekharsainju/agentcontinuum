@@ -103,7 +103,17 @@ public sealed class LaunchCoordinator
 
         var task = _tasks.Get(taskId)!;
         var rules = _rulesFor(task.CliVersion);
-        var opId = _ledger.BeginIntent(taskId);
+        string opId;
+        try
+        {
+            opId = _ledger.BeginIntent(taskId);
+        }
+        catch (InvalidOperationException)
+        {
+            // The task changed after pre-flight passed. As with a refused admission it is left as it is.
+            _log.Write($"launch of task {taskId} refused at intent");
+            return new LaunchReport(false, new PreflightResult(false, [PreflightReasons.AdmissionState]), null, null);
+        }
         if (TryStart(task, kind, opId, rules) is not { } started)
         {
             // As in recovery of an INTENT op with no process: the attempt stays counted and the task is updated
@@ -234,6 +244,11 @@ public sealed class LaunchCoordinator
     /// <summary>The CLI arguments for a launch; the prompt goes on stdin.</summary>
     public static string[] BuildArgs(TaskRecord task, LaunchKind kind, string? settingsPath)
     {
+        // Pre-flight and the ledger refuse these modes already; the args are the last place one could slip through.
+        if (!LaunchPolicy.IsAllowedMode(task.PermissionMode))
+        {
+            throw new InvalidOperationException("The permission mode is outside the launch policy.");
+        }
         List<string> args =
         [
             "-p", kind == LaunchKind.First ? "--session-id" : "--resume", task.SessionId.ToString("D"),

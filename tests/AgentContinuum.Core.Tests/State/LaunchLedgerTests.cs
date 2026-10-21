@@ -224,6 +224,8 @@ public sealed class LaunchLedgerTests : IDisposable
     {
         var ledger = new LaunchLedger(_store);
         var first = DriveTo(ledger, "t1", OpState.Classified);
+        // The outcome is applied to the task before the op is classified.
+        _tasks.SetState("t1", TaskState.WaitingForReset, null);
 
         var second = ledger.BeginIntent("t1");
 
@@ -232,10 +234,11 @@ public sealed class LaunchLedgerTests : IDisposable
         Assert.Equal(2, ledger.Get(second)!.AttemptNo);
     }
 
-    private static void Finish(LaunchLedger ledger, string opId, Outcome outcome)
+    private void Finish(LaunchLedger ledger, string opId, Outcome outcome)
     {
         ledger.MarkSpawned(opId, 4242, 133_000_000_000_000_000, Session);
         ledger.MarkExited(opId, 1);
+        _tasks.SetState("t1", TaskState.WaitingForReset, null);
         ledger.Classify(opId, outcome, "test");
     }
 

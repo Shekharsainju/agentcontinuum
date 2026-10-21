@@ -27,9 +27,15 @@ public sealed class LaunchLedger
     {
         var opId = Guid.NewGuid().ToString("N");
 
-        var (attemptsUsed, maxAttempts) = Attempts(tx, taskId);
+        var (attemptsUsed, maxAttempts, state, mode) = Gate(tx, taskId);
 
-        // Pre-flight checks this too; repeating it here keeps I3 inside the transaction that counts.
+        // Pre-flight checks these too. Repeating them here keeps I3 inside the transaction that counts, and stops
+        // a revoke or a permission change that lands after pre-flight from launching.
+        if (!LaunchPolicy.IsLaunchable(state) || !LaunchPolicy.IsAllowedMode(mode))
+        {
+            throw new InvalidOperationException($"Task {taskId} cannot launch in {StateText.ToText(state)} with its permission mode.");
+        }
+
         if (attemptsUsed >= maxAttempts)
         {
             throw new InvalidOperationException($"Task {taskId} has used {attemptsUsed} of {maxAttempts} attempts.");
@@ -136,12 +142,12 @@ public sealed class LaunchLedger
         }
     }
 
-    private (long Used, long Max) Attempts(SqliteTransaction tx, string taskId)
+    private (long Used, long Max, TaskState State, string Mode) Gate(SqliteTransaction tx, string taskId)
     {
-        using var cmd = Command(tx, "SELECT attempts_used, max_attempts FROM tasks WHERE task_id = $task_id", [("$task_id", taskId)]);
+        using var cmd = Command(tx, "SELECT attempts_used, max_attempts, state, permission_mode FROM tasks WHERE task_id = $task_id", [("$task_id", taskId)]);
         using var reader = cmd.ExecuteReader();
         return reader.Read()
-            ? (reader.GetInt64(0), reader.GetInt64(1))
+            ? (reader.GetInt64(0), reader.GetInt64(1), StateText.Parse<TaskState>(reader.GetString(2)), reader.GetString(3))
             : throw new InvalidOperationException($"No task {taskId}.");
     }
 
