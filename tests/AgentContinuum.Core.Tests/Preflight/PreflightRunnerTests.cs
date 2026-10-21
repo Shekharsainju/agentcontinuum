@@ -1,6 +1,7 @@
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Preflight;
+using AgentContinuum.Core.Workspace;
 
 namespace AgentContinuum.Core.Tests.Preflight;
 
@@ -10,12 +11,15 @@ public sealed class PreflightRunnerTests : IDisposable
 
     public void Dispose() => _f.Dispose();
 
-    private PreflightResult Run(bool now = false)
+    private PreflightHost Host() => new(GitRepo.GitExe, _f.ParentEnv, _f.UserProfile, _f.ManagedSettingsPaths);
+
+    private PreflightResult Run(bool now = false, PreflightHost? host = null)
     {
         _f.EnsureAdded();
-        var host = new PreflightHost(GitRepo.GitExe, _f.ParentEnv, _f.UserProfile, _f.ManagedSettingsPaths);
-        return new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, host).Run(PreflightFixture.TaskId, now);
+        return new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, host ?? Host()).Run(PreflightFixture.TaskId, now);
     }
+
+    private string Baseline() => WorkspaceFingerprint.Compute(_f.Repo.Path, GitRepo.GitExe).Hash!;
 
     private void AssertNothingCounted()
     {
@@ -241,11 +245,63 @@ public sealed class PreflightRunnerTests : IDisposable
     }
 
     [Fact]
+    public void Preflight_BaselineMatches_Passes()
+    {
+        _f.Task = _f.Task with { BaselineFingerprint = Baseline() };
+
+        Assert.True(Run().Pass);
+    }
+
+    [Theory]
+    [InlineData("prompt.md")]
+    [InlineData("untracked.txt")]
+    public void Preflight_WorkspaceDiffersFromBaseline_WorkspaceChanged(string file)
+    {
+        _f.Task = _f.Task with { BaselineFingerprint = Baseline() };
+        _f.Repo.Write(file, "changed");
+
+        Assert.Equal(["WORKSPACE_CHANGED"], Run().Reasons);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Preflight_FingerprintFails_WorkspaceChanged(bool hasBaseline)
+    {
+        if (hasBaseline)
+        {
+            _f.Task = _f.Task with { BaselineFingerprint = Baseline() };
+        }
+        _f.Repo.Git("checkout", "-q", "--orphan", "unborn");
+
+        var reason = Assert.Single(Run().Reasons);
+        Assert.StartsWith("WORKSPACE_CHANGED: ", reason);
+    }
+
+    [Fact]
+    public void Preflight_WorkspaceOverLimit_WorkspaceTooLarge()
+    {
+        _f.Repo.Write("second.txt", "two");
+
+        Assert.Equal(["WORKSPACE_TOO_LARGE"], Run(host: Host() with { FingerprintMaxFiles = 1 }).Reasons);
+    }
+
+    [Fact]
+    public void Preflight_CollectsAllReasons()
+    {
+        _f.Task = _f.Task with { AttemptsUsed = _f.Task.MaxAttempts, BaselineFingerprint = Baseline() };
+        _f.Repo.Write("prompt.md", "changed");
+
+        var result = Run();
+
+        Assert.False(result.Pass);
+        Assert.Equal(["ATTEMPTS_EXHAUSTED", "WORKSPACE_CHANGED"], result.Reasons);
+    }
+
+    [Fact]
     public void Preflight_UnknownTask_AdmissionState()
     {
-        var host = new PreflightHost(GitRepo.GitExe, _f.ParentEnv, _f.UserProfile, _f.ManagedSettingsPaths);
-
-        var result = new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, host).Run("nope", false);
+        var result = new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, Host()).Run("nope", false);
 
         Assert.Equal(["ADMISSION_STATE"], result.Reasons);
     }
