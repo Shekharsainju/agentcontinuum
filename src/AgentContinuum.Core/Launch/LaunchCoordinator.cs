@@ -36,6 +36,8 @@ public sealed class LaunchCoordinator
 
     public const string RunErrorReason = "Run error";
 
+    public const string JobNotEmptiedReason = "Processes outlived the run";
+
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan KillRetryDelay = TimeSpan.FromSeconds(1);
@@ -169,7 +171,14 @@ public sealed class LaunchCoordinator
         TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Task<int> exited, Task<bool> emptied, Task watch)
     {
         var taskId = task.TaskId;
-        await ReadStream(run, opId, rules);
+        var reading = ReadStream(run, opId, rules);
+        // A job that will not empty after exit can hold the stream open for ever, and closing it is the last resort.
+        if (await Task.WhenAny(reading, emptied) == emptied && emptied is { IsCompletedSuccessfully: true, Result: false })
+        {
+            _log.Write($"close op {opId} reason processes after exit");
+            throw new RunStoppedException(JobNotEmptiedReason);
+        }
+        await reading;
         await watch;
         var exitCode = await exited;
         _ledger.MarkExited(opId, exitCode);
