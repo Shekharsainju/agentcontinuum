@@ -88,6 +88,46 @@ public sealed class LocalCommandTests : IDisposable
         Assert.Empty(_c.Notifier.Attentions);
     }
 
+    private static MemoryStream HookPayload(string session) => new(System.Text.Encoding.UTF8.GetBytes(
+        $$"""{"hook_event_name":"StopFailure","session_id":"{{session}}","error_type":"rate_limit","message":"SENTINEL-hook"}"""));
+
+    [Fact]
+    public async Task HookStopFailure_RecordsAllowlistedFieldsSilently()
+    {
+        var services = _c.Services();
+        var opId = _c.F.Ledger.BeginIntent(TaskId);
+
+        var exit = await App.Run(["hook", "stop-failure", "--op", opId], services with { In = HookPayload(_c.Session) });
+
+        Assert.Equal(0, exit);
+        Assert.Equal("", _c.Output);
+        var hook = Assert.Single(Core.Events.HookRecorder.ForOp(_c.F.Store, opId));
+        Assert.Equal(("StopFailure", _c.Session), (hook.HookName, hook.SessionId));
+        using var cmd = _c.F.Store.Connection.CreateCommand();
+        cmd.CommandText = "SELECT fields_json FROM events";
+        Assert.DoesNotContain("SENTINEL", (string)cmd.ExecuteScalar()!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HookStopFailure_NoLiveOp_RecordsNothing(bool finished)
+    {
+        var services = _c.Services();
+        var opId = "0123456789abcdef0123456789abcdef";
+        if (finished)
+        {
+            opId = _c.F.Ledger.BeginIntent(TaskId);
+            _c.F.Ledger.Abandon(opId);
+        }
+
+        var exit = await App.Run(["hook", "stop-failure", "--op", opId], services with { In = HookPayload(_c.Session) });
+
+        Assert.Equal(0, exit);
+        Assert.Equal("", _c.Output);
+        Assert.Empty(Core.Events.HookRecorder.ForOp(_c.F.Store, opId));
+    }
+
     [Fact]
     public async Task PinCli_RefusesANonExe()
     {
