@@ -11,17 +11,34 @@ public sealed class WmiProcessLister : IProcessLister
     private const string Query = "SELECT ProcessId, Name, CreationDate, ExecutablePath, CommandLine FROM Win32_Process";
 
     private readonly Func<IEnumerable<string>> _pinnedCliPaths;
+    private readonly TimeSpan _timeout;
     private readonly Func<int, SecurityIdentifier?> _ownerOf;
 
     /// <param name="pinnedCliPaths">Every task's pinned CLI path, read on each listing.</param>
+    /// <param name="timeout">How long a listing may take before it fails; 10 seconds when null.</param>
     /// <param name="ownerOf">Owner of a process, or null when it cannot be read; for tests.</param>
-    public WmiProcessLister(Func<IEnumerable<string>> pinnedCliPaths, Func<int, SecurityIdentifier?>? ownerOf = null)
+    public WmiProcessLister(
+        Func<IEnumerable<string>> pinnedCliPaths, TimeSpan? timeout = null, Func<int, SecurityIdentifier?>? ownerOf = null)
     {
         _pinnedCliPaths = pinnedCliPaths;
+        _timeout = timeout ?? TimeSpan.FromSeconds(10);
         _ownerOf = ownerOf ?? OwnerSid;
     }
 
     public IReadOnlyList<ProcessInfo> ListOwnProcesses()
+    {
+        // WMI calls have no deadline of their own, and a stalled winmgmt must block a launch rather than hang it.
+        try
+        {
+            return Task.Run(List).WaitAsync(_timeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException e)
+        {
+            throw new ProcessListException("Listing processes through WMI timed out.", e);
+        }
+    }
+
+    private List<ProcessInfo> List()
     {
         SecurityIdentifier user;
         using (var self = WindowsIdentity.GetCurrent())
