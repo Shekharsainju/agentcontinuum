@@ -22,6 +22,8 @@ public static class App
                 return LocalCommands.Preview(services, taskId, now: false);
             case ["preview", var taskId, "--now"]:
                 return LocalCommands.Preview(services, taskId, now: true);
+            case ["hook", "stop-failure", .. var hookArgs]:
+                return HookCommand.StopFailure(services, hookArgs);
             case ["status"]:
                 return StatusCommand.Run(services);
             case ["task", "start", var taskId]:
