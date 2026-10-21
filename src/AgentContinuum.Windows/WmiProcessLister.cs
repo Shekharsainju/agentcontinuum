@@ -8,7 +8,18 @@ namespace AgentContinuum.Windows;
 /// <summary>Lists the current user's processes from <c>Win32_Process</c>.</summary>
 public sealed class WmiProcessLister : IProcessLister
 {
-    private const string Query = "SELECT ProcessId, CreationDate, ExecutablePath, CommandLine FROM Win32_Process";
+    private const string Query = "SELECT ProcessId, Name, CreationDate, ExecutablePath, CommandLine FROM Win32_Process";
+
+    private readonly Func<IEnumerable<string>> _pinnedCliPaths;
+    private readonly Func<int, SecurityIdentifier?> _ownerOf;
+
+    /// <param name="pinnedCliPaths">Every task's pinned CLI path, read on each listing.</param>
+    /// <param name="ownerOf">Owner of a process, or null when it cannot be read; for tests.</param>
+    public WmiProcessLister(Func<IEnumerable<string>> pinnedCliPaths, Func<int, SecurityIdentifier?>? ownerOf = null)
+    {
+        _pinnedCliPaths = pinnedCliPaths;
+        _ownerOf = ownerOf ?? OwnerSid;
+    }
 
     public IReadOnlyList<ProcessInfo> ListOwnProcesses()
     {
@@ -20,6 +31,7 @@ public sealed class WmiProcessLister : IProcessLister
         var own = new List<ProcessInfo>();
         try
         {
+            var cliNames = _pinnedCliPaths().Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
             using var searcher = new ManagementObjectSearcher(Query);
             using var results = searcher.Get();
             foreach (ManagementObject process in results)
@@ -27,9 +39,19 @@ public sealed class WmiProcessLister : IProcessLister
                 using (process)
                 {
                     var pid = unchecked((int)(uint)process["ProcessId"]);
-                    if (OwnerSid(pid) is { } owner && owner.Equals(user))
+                    var owner = _ownerOf(pid);
+                    if (owner is null)
                     {
-                        own.Add(ToInfo(pid, process));
+                        // Other users' processes are unreadable too, so only a CLI by name is kept, and kept as
+                        // unknown: an elevated run of ours would otherwise vanish and look like no live session.
+                        if (cliNames.Contains(process["Name"] as string ?? ""))
+                        {
+                            own.Add(new ProcessInfo(pid, CreatedAt(process), null, null));
+                        }
+                    }
+                    else if (owner.Equals(user))
+                    {
+                        own.Add(new ProcessInfo(pid, CreatedAt(process), process["ExecutablePath"] as string, process["CommandLine"] as string));
                     }
                 }
             }
@@ -43,8 +65,6 @@ public sealed class WmiProcessLister : IProcessLister
     }
 
     // The owner is read from the token because WMI's GetOwnerSid takes seconds across a few hundred processes.
-    // A process whose owner cannot be read is left out: other users' processes look exactly like that,
-    // and counting them would make every unreadable command line look like one of ours.
     private static SecurityIdentifier? OwnerSid(int pid)
     {
         using var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
@@ -59,15 +79,6 @@ public sealed class WmiProcessLister : IProcessLister
         }
     }
 
-    private static ProcessInfo ToInfo(int pid, ManagementObject process)
-    {
-        var created = process["CreationDate"] is string date
-            ? ManagementDateTimeConverter.ToDateTime(date).ToFileTimeUtc()
-            : 0;
-        return new ProcessInfo(
-            pid,
-            created,
-            process["ExecutablePath"] as string,
-            process["CommandLine"] as string);
-    }
+    private static long CreatedAt(ManagementObject process) =>
+        process["CreationDate"] is string date ? ManagementDateTimeConverter.ToDateTime(date).ToFileTimeUtc() : 0;
 }
