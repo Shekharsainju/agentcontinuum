@@ -298,6 +298,75 @@ public sealed class PreflightRunnerTests : IDisposable
         Assert.Equal(["ATTEMPTS_EXHAUSTED", "WORKSPACE_CHANGED"], result.Reasons);
     }
 
+    private const string BypassSettings = """{"permissions":{"defaultMode":"bypassPermissions"}}""";
+
+    [Theory]
+    [InlineData("project")]
+    [InlineData("project-local")]
+    [InlineData("user")]
+    [InlineData("managed")]
+    public void Preflight_BypassInProjectSettings_PermissionUnsafe(string scope)
+    {
+        var path = scope switch
+        {
+            "project" => _f.Repo.File(@".claude\settings.json"),
+            "project-local" => _f.Repo.File(@".claude\settings.local.json"),
+            "user" => Path.Combine(_f.UserProfile, ".claude", "settings.json"),
+            _ => _f.ManagedSettingsPaths[1],
+        };
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, BypassSettings);
+
+        Assert.Equal([$"PERMISSION_UNSAFE: {scope} sets bypassPermissions"], Run().Reasons);
+    }
+
+    [Fact]
+    public void Preflight_BypassAnywhereInSettings_PermissionUnsafe()
+    {
+        _f.Repo.Write(@".claude\settings.json", """{"permissions":{"allow":[],"other":["BypassPermissions"]}}""");
+
+        Assert.Equal(["PERMISSION_UNSAFE: project sets bypassPermissions"], Run().Reasons);
+    }
+
+    [Fact]
+    public void Preflight_SettingsWithoutBypass_Passes()
+    {
+        _f.Repo.Write(@".claude\settings.json", """{"permissions":{"defaultMode":"acceptEdits","disableBypassPermissionsMode":"disable"}}""");
+
+        Assert.True(Run().Pass);
+    }
+
+    [Fact]
+    public void Preflight_UnreadableSettings_PermissionUnsafe()
+    {
+        _f.Repo.Write(@".claude\settings.json", "{");
+
+        Assert.Contains("PERMISSION_UNSAFE: project unreadable", Run().Reasons);
+    }
+
+    [Theory]
+    [InlineData("bypassPermissions")]
+    [InlineData("dontAsk")]
+    [InlineData("Default")]
+    [InlineData("")]
+    public void Preflight_PolicyModeNotAllowed_PermissionUnsafe(string mode)
+    {
+        _f.Task = _f.Task with { PermissionMode = mode };
+
+        Assert.Equal(["PERMISSION_UNSAFE: policy mode not allowed"], Run().Reasons);
+    }
+
+    [Theory]
+    [InlineData("default")]
+    [InlineData("acceptEdits")]
+    [InlineData("plan")]
+    public void Preflight_AllowedPolicyMode_Passes(string mode)
+    {
+        _f.Task = _f.Task with { PermissionMode = mode };
+
+        Assert.True(Run().Pass);
+    }
+
     [Fact]
     public void Preflight_UnknownTask_AdmissionState()
     {
