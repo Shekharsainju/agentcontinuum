@@ -51,6 +51,24 @@ public sealed class RecoveryServiceTests : IDisposable
         Assert.Equal(1, task.AttemptsUsed);
     }
 
+    // Kill-on-close ended the process with the daemon, so no listing finds it, yet it ran and may have done work.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Intent_WithProcessRecorded_Interrupted_NeedsAttention(bool listingFails)
+    {
+        var opId = _ledger.BeginIntent("t1");
+        _ledger.MarkCreated(opId, 4242, 133_000_000_000_000_000);
+        _lister.Fail = listingFails;
+
+        Service().Reconcile();
+
+        Assert.Equal(OpState.Interrupted, _ledger.Get(opId)!.State);
+        var task = _tasks.Get("t1")!;
+        Assert.Equal((TaskState.NeedsAttention, RecoveryService.InterruptedLaunchReason), (task.State, task.AttentionReason));
+        Assert.Equal(1, task.AttemptsUsed);
+    }
+
     [Theory]
     [InlineData("claude.exe -p --session-id {0} --output-format stream-json")]
     [InlineData("claude.exe -p --resume {0}")]
