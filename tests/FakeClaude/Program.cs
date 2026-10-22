@@ -16,9 +16,13 @@ if (args is ["auth", "status"])
     return 0;
 }
 
-if (args is ["--fake-child", var childSeconds])
+if (args is ["--fake-child", var childSeconds, .. var touch])
 {
     Thread.Sleep(TimeSpan.FromSeconds(int.Parse(childSeconds)));
+    if (touch is [var touchPath])
+    {
+        File.WriteAllText(touchPath, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
     return 0;
 }
 
@@ -60,7 +64,10 @@ using (var stdin = new MemoryStream())
 }
 
 var lingerSeconds = scenario["lingerSeconds"]?.GetValue<int>() ?? 0;
-SpawnChildren(scenario["spawnChildren"]?.GetValue<int>() ?? 0, lingerSeconds);
+SpawnChildren(
+    scenario["spawnChildren"]?.GetValue<int>() ?? 0,
+    scenario["childLingerSeconds"]?.GetValue<int>() ?? lingerSeconds,
+    scenario["childTouchFile"]?.GetValue<string>());
 
 if (scenario["authSource"]?.GetValue<string>() is { } authSource)
 {
@@ -85,8 +92,8 @@ Thread.Sleep(TimeSpan.FromSeconds(lingerSeconds));
 
 return scenario["exitCode"]?.GetValue<int>() ?? 0;
 
-// Children live as long as the parent lingers so tests of job teardown have something to kill.
-static void SpawnChildren(int count, int seconds)
+// By default children live as long as the parent lingers so tests of job teardown have something to kill.
+static void SpawnChildren(int count, int seconds, string? touchFile)
 {
     if (count <= 0)
     {
@@ -102,6 +109,10 @@ static void SpawnChildren(int count, int seconds)
         };
         info.ArgumentList.Add("--fake-child");
         info.ArgumentList.Add(seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (touchFile is not null)
+        {
+            info.ArgumentList.Add(Path.Combine(Environment.CurrentDirectory, touchFile));
+        }
         using var child = System.Diagnostics.Process.Start(info)!;
         pids.Add(child.Id);
     }
