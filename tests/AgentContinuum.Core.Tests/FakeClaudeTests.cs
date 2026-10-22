@@ -114,6 +114,18 @@ public sealed class FakeClaudeTests : IDisposable
         Assert.DoesNotContain("SENTINEL-stdin", recorded);
     }
 
+    [Fact]
+    public void EachHeadlessRun_AppendsOneStartLine()
+    {
+        Scenario("""{ "events": [], "exitCode": 0 }""");
+
+        FakeClaudeProcess.Run(_dir.Path, HeadlessArgs());
+        FakeClaudeProcess.Run(_dir.Path, HeadlessArgs("--resume"));
+        FakeClaudeProcess.Run(_dir.Path, ["--version"]);
+
+        Assert.Equal([Session, Session], File.ReadAllLines(_dir.File("fake-claude-starts.log")));
+    }
+
     private string HookSettings(string hookName, string sinkPath)
     {
         var command = $"\"{FakeClaudeProcess.ExePath}\" --fake-hook-sink \"{sinkPath}\"";
