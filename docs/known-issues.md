@@ -15,6 +15,20 @@ Open Low items from the launch coordinator reviews. Each is accepted for now and
 ## Windows process host
 
 - `JobProcessHost.Start` can leave the process running outside supervision if the `JobHostedRun` constructor throws after the process has joined its job and resumed.
+- A daemon crash between creating the suspended process and assigning it to its job leaves a suspended orphan outside any job. It never runs, but its command line holds the session ID, so recovery of that INTENT row reports "Interrupted launch" and the orphan lingers. Creating the process directly in the job with `PROC_THREAD_ATTRIBUTE_JOB_LIST` would close the window.
+
+## Process check
+
+- Your own processes that WMI cannot read, such as elevated or protected ones, count as a possible session only when their image name is a pinned CLI's. An elevated Claude Code under another image name, such as `node.exe` from an npm install or a renamed copy, that resumes a task's session would now be missed. Before, ctfmon and taskhostw made every launch fail with PROCESS_UNKNOWN.
+- Any process named like a pinned CLI that is starting or exiting at the moment of the listing can show no command line, and the launch is then refused with PROCESS_UNKNOWN. It fails safe, and a retry passes. Opening Claude Code at the same moment as a launch can cause it.
+- `PreflightRunner`, `LaunchCoordinator` and `RecoveryService` still fall back to the embedded rules when no rules lookup is passed. Every caller passes one today; making it required would stop a future caller judging billing by different rules again.
+
+## Test host
+
+- `ac-test.exe` replaces only `LOCALAPPDATA` and `USERPROFILE`. `APPDATA`, `HOMEDRIVE`, `HOMEPATH` and `TEMP` stay real and reach the child. That is harmless with FakeClaude, but a real CLI run under `ac-test.exe` would see your real `%APPDATA%`.
+- Its refusal of your own state and profile folders compares normalised path text only. A junction, short name or `\\?\` spelling of the same folder would pass.
+- With `realToasts` on, it registers its own notification activator for your user. A click starts `ac-test.exe` with your real environment, so the config must sit beside the exe for the click to be handled.
+- AC6 times the 10 s from when the test sees the hook row, up to about 100 ms after it was written, because the row's time is stored in whole seconds.
 
 ## Daemon and commands
 
