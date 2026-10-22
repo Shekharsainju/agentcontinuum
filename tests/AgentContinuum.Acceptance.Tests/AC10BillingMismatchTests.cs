@@ -37,7 +37,7 @@ public sealed class AC10BillingMismatchTests : IDisposable
         Assert.Equal(RunClassifier.BillingMismatchReason, _root.Task(taskId).AttentionReason);
         var op = Assert.Single(_root.Ops(taskId));
         Assert.Equal((OpState.Classified, Outcome.BillingMismatch), (op.State, op.Outcome));
-        Assert.Throws<ArgumentException>(() => Process.GetProcessById(op.Pid!.Value));
+        Assert.True(AcceptanceRoot.Gone(op.Pid!.Value));
         Assert.Contains($"attention\t{taskId}\tacceptance task needs attention\t{RunClassifier.BillingMismatchReason}", _root.Notifications());
     }
 }
