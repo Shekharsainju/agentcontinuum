@@ -77,7 +77,7 @@ public static class LocalCommands
     {
         using var store = services.OpenStore();
         var s = services;
-        var runner = new PreflightRunner(store, s.Lister, s.Runner, new BillingProofs(s.Runner, s.Clock, store), s.Clock, s.Preflight);
+        var runner = new PreflightRunner(store, s.Lister, s.Runner, new BillingProofs(s.Runner, s.Clock, store), s.Clock, s.Preflight, s.RulesFor);
         var result = runner.Run(taskId, now);
         services.Out.WriteLine(result.Pass ? "pre-flight passed" : $"pre-flight failed: {string.Join(", ", result.Reasons)}");
         return result.Pass ? 0 : 1;

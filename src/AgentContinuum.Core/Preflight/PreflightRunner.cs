@@ -1,6 +1,7 @@
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Preflight.Checks;
+using AgentContinuum.Core.Rules;
 using AgentContinuum.Core.State;
 
 namespace AgentContinuum.Core.Preflight;
@@ -13,7 +14,14 @@ public sealed class PreflightRunner
     private readonly PreflightHost _host;
     private readonly IReadOnlyList<IPreflightCheck> _checks;
 
-    public PreflightRunner(StateStore store, IProcessLister lister, ICommandRunner runner, BillingProofs billing, IClock clock, PreflightHost host)
+    public PreflightRunner(
+        StateStore store,
+        IProcessLister lister,
+        ICommandRunner runner,
+        BillingProofs billing,
+        IClock clock,
+        PreflightHost host,
+        Func<string, ClaudeRules?>? rulesFor = null)
     {
         _tasks = new TaskRepository(store);
         _clock = clock;
@@ -26,7 +34,7 @@ public sealed class PreflightRunner
             new BinaryCheck(runner),
             new WorkspaceCheck(host),
             new PermissionCheck(host),
-            new BillingCheck(billing, host),
+            new BillingCheck(billing, host, rulesFor ?? VersionRules.For),
             new ControllerCheck(store),
         ];
     }

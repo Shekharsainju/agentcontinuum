@@ -1,6 +1,7 @@
 using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Platform;
 using AgentContinuum.Core.Preflight;
+using AgentContinuum.Core.Rules;
 using AgentContinuum.Core.Workspace;
 
 namespace AgentContinuum.Core.Tests.Preflight;
@@ -24,7 +25,7 @@ public sealed class PreflightRunnerTests : IDisposable
     public void Preflight_BillingUsesTheRulesItWasGiven()
     {
         _f.EnsureAdded();
-        var withoutP5 = Rules.VersionRules.For("2.1.304")! with { P5 = null };
+        var withoutP5 = VersionRules.For("2.1.304")! with { P5 = null };
         var runner = new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, Host(), _ => withoutP5);
 
         var result = runner.Run(PreflightFixture.TaskId, false);

@@ -9,16 +9,18 @@ internal sealed class BillingCheck : IPreflightCheck
 
     private readonly BillingProofs _billing;
     private readonly PreflightHost _host;
+    private readonly Func<string, ClaudeRules?> _rulesFor;
 
-    public BillingCheck(BillingProofs billing, PreflightHost host)
+    public BillingCheck(BillingProofs billing, PreflightHost host, Func<string, ClaudeRules?> rulesFor)
     {
         _billing = billing;
         _host = host;
+        _rulesFor = rulesFor;
     }
 
     public IEnumerable<string> Reasons(PreflightContext ctx)
     {
-        var rules = VersionRules.For(ctx.Task.CliVersion);
+        var rules = _rulesFor(ctx.Task.CliVersion);
         // P4 runs the CLI. Withholding its rule leaves it unevaluable, so an unpinned binary or one with no
         // allowlisted environment is never run.
         if (rules is not null && (ctx.CliPinProblem is not null || ctx.ChildEnv is null))
