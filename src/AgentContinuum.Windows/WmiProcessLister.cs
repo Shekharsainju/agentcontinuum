@@ -48,27 +48,22 @@ public sealed class WmiProcessLister : IProcessLister
         var own = new List<ProcessInfo>();
         try
         {
-            var cliNames = _pinnedCliPaths().Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var cliNames = _pinnedCliPaths().Select(p => Path.GetFileName(p) ?? "").ToHashSet(StringComparer.OrdinalIgnoreCase);
             using var searcher = new ManagementObjectSearcher(Query);
             using var results = searcher.Get();
             foreach (ManagementObject process in results)
             {
                 using (process)
                 {
-                    var pid = unchecked((int)(uint)process["ProcessId"]);
-                    var owner = _ownerOf(pid);
-                    if (owner is null)
+                    var row = new Row(
+                        unchecked((int)(uint)process["ProcessId"]),
+                        process["Name"] as string ?? "",
+                        CreatedAt(process),
+                        process["ExecutablePath"] as string,
+                        process["CommandLine"] as string);
+                    if (Own(row, _ownerOf(row.Pid), user, cliNames) is { } info)
                     {
-                        // Other users' processes are unreadable too, so only a CLI by name is kept, and kept as
-                        // unknown: an elevated run of ours would otherwise vanish and look like no live session.
-                        if (cliNames.Contains(process["Name"] as string ?? ""))
-                        {
-                            own.Add(new ProcessInfo(pid, CreatedAt(process), null, null));
-                        }
-                    }
-                    else if (owner.Equals(user))
-                    {
-                        own.Add(new ProcessInfo(pid, CreatedAt(process), process["ExecutablePath"] as string, process["CommandLine"] as string));
+                        own.Add(info);
                     }
                 }
             }
@@ -79,6 +74,26 @@ public sealed class WmiProcessLister : IProcessLister
             throw new ProcessListException("Could not list processes through WMI.", e);
         }
         return own;
+    }
+
+    /// <summary>One <c>Win32_Process</c> row as WMI reported it.</summary>
+    public sealed record Row(int Pid, string Name, long CreatedAtFileTime, string? ExecutablePath, string? CommandLine);
+
+    /// <summary>The row as one of your processes, or null when it is not one or cannot matter.</summary>
+    public static ProcessInfo? Own(Row row, SecurityIdentifier? owner, SecurityIdentifier user, IReadOnlySet<string> cliNames)
+    {
+        if (owner is not null && !owner.Equals(user))
+        {
+            return null;
+        }
+        if (owner is not null && (row.ExecutablePath is not null || !string.IsNullOrEmpty(row.CommandLine)))
+        {
+            return new ProcessInfo(row.Pid, row.CreatedAtFileTime, row.ExecutablePath, row.CommandLine);
+        }
+        // A process WMI cannot read, whether another user's or an elevated or protected one of ours, is kept only
+        // when its name is a pinned CLI's, and kept as unknown: an elevated run of ours would otherwise vanish and
+        // look like no live session, while every other such process, ctfmon among them, would refuse every launch.
+        return cliNames.Contains(row.Name) ? new ProcessInfo(row.Pid, row.CreatedAtFileTime, null, null) : null;
     }
 
     // The owner is read from the token because WMI's GetOwnerSid takes seconds across a few hundred processes.
