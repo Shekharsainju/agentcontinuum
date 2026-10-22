@@ -47,6 +47,36 @@ public sealed class JobProcessHostTests : IDisposable
         Assert.True(run.CreatedAtFileTime > DateTime.UtcNow.AddMinutes(-5).ToFileTimeUtc());
     }
 
+    [Fact]
+    public async Task Start_ReportsIdentityBeforeRunning()
+    {
+        _launch.Scenario("""{ "events": [], "exitCode": 0 }""");
+        (int Pid, long Created, bool Ran)? reported = null;
+
+        using var run = new JobProcessHost().Start(_launch.Spec(), (pid, created) =>
+            reported = (pid, created, File.Exists(Path.Combine(_launch.WorkingDir, "fake-claude-args.json"))));
+        await run.WaitForExit();
+
+        Assert.Equal((run.Pid, run.CreatedAtFileTime, false), reported);
+    }
+
+    [Fact]
+    public void Start_CreatedThrows_ProcessEndedNeverRan()
+    {
+        _launch.Scenario("""{ "events": [], "exitCode": 0 }""");
+        var pid = 0;
+
+        Assert.Throws<InvalidOperationException>(() => new JobProcessHost().Start(_launch.Spec(), (p, _) =>
+        {
+            pid = p;
+            throw new InvalidOperationException("ledger write failed");
+        }));
+
+        Assert.True(pid > 0);
+        Assert.True(FakeClaudeLaunch.WaitUntil(() => !FakeClaudeLaunch.IsRunning(pid), TimeSpan.FromSeconds(5)));
+        Assert.False(File.Exists(Path.Combine(_launch.WorkingDir, "fake-claude-args.json")));
+    }
+
     private IHostedRun StartWithChildren()
     {
         _launch.Scenario("""{ "spawnChildren": 2, "lingerSeconds": 30 }""");
