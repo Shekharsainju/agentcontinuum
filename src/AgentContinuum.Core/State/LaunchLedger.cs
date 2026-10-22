@@ -75,6 +75,16 @@ public sealed class LaunchLedger
         return opId;
     });
 
+    /// <summary>Records the process on the INTENT row before it runs, so recovery knows a process existed.</summary>
+    public void MarkCreated(string opId, int pid, long createdAtFileTime) =>
+        Transition(
+            opId,
+            [OpState.Intent],
+            OpState.Intent,
+            "pid = $pid, proc_created_at = $created",
+            ("$pid", pid),
+            ("$created", createdAtFileTime));
+
     public void MarkSpawned(string opId, int pid, long createdAtFileTime, Guid sessionId) =>
         Transition(
             opId,
