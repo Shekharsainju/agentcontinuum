@@ -35,6 +35,10 @@ if (!Options.TryParse(args, out var options))
     return 64;
 }
 
+var sessionId = options.SessionId ?? options.Resume ?? "";
+// Written first, so a run killed at any later point is still counted as a start.
+File.AppendAllText(Path.Combine(Environment.CurrentDirectory, "fake-claude-starts.log"), sessionId + "\n");
+
 var scenarioPath = Path.Combine(Environment.CurrentDirectory, ".fake-claude.json");
 if (!File.Exists(scenarioPath))
 {
@@ -42,7 +46,6 @@ if (!File.Exists(scenarioPath))
     return 70;
 }
 var scenario = JsonNode.Parse(File.ReadAllText(scenarioPath))!.AsObject();
-var sessionId = options.SessionId ?? options.Resume ?? "";
 
 using (var stdin = new MemoryStream())
 {
