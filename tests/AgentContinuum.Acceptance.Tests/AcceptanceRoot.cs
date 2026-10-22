@@ -170,7 +170,7 @@ public sealed class AcceptanceRoot : IDisposable
     {
         using var store = StateStore.Open(Database);
         using var cmd = store.Connection.CreateCommand();
-        cmd.CommandText = "SELECT op_id, state, attempt_no, outcome, reason FROM launch_ops WHERE task_id = $task ORDER BY rowid";
+        cmd.CommandText = "SELECT op_id, state, attempt_no, outcome, reason, pid FROM launch_ops WHERE task_id = $task ORDER BY rowid";
         cmd.Parameters.AddWithValue("$task", taskId);
         using var reader = cmd.ExecuteReader();
         var rows = new List<OpRow>();
@@ -181,7 +181,8 @@ public sealed class AcceptanceRoot : IDisposable
                 StateText.Parse<OpState>(reader.GetString(1)),
                 reader.GetInt32(2),
                 reader.IsDBNull(3) ? null : StateText.Parse<Outcome>(reader.GetString(3)),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetInt32(5)));
         }
         return rows;
     }
@@ -297,4 +298,4 @@ public sealed class AcceptanceRoot : IDisposable
     }
 }
 
-public sealed record OpRow(string OpId, OpState State, int AttemptNo, Outcome? Outcome, string? Reason);
+public sealed record OpRow(string OpId, OpState State, int AttemptNo, Outcome? Outcome, string? Reason, int? Pid);
