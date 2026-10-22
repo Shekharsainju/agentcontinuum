@@ -40,6 +40,31 @@ public sealed class LaunchLedgerTests : IDisposable
         Assert.Equal(TaskState.Running, task.State);
     }
 
+    // Recovery reads a PID on an INTENT row as proof a process existed, so it is written before the process runs.
+    [Fact]
+    public void MarkCreated_RecordsProcessAndStaysIntent()
+    {
+        var ledger = new LaunchLedger(_store);
+        var opId = ledger.BeginIntent("t1");
+
+        ledger.MarkCreated(opId, 4242, 133_000_000_000_000_000);
+
+        var op = ledger.Get(opId)!;
+        Assert.Equal((OpState.Intent, 4242, 133_000_000_000_000_000L), (op.State, op.Pid, op.ProcCreatedAtFileTime));
+        Assert.Equal(opId, ledger.Live("t1")!.OpId);
+    }
+
+    [Fact]
+    public void MarkCreated_OnlyOnIntent()
+    {
+        var ledger = new LaunchLedger(_store);
+        var opId = ledger.BeginIntent("t1");
+        ledger.Abandon(opId);
+
+        Assert.Throws<InvalidOperationException>(() => ledger.MarkCreated(opId, 4242, 133_000_000_000_000_000));
+        Assert.Null(ledger.Get(opId)!.Pid);
+    }
+
     [Fact]
     public void BeginIntent_CountsAttemptInSameTransaction()
     {
