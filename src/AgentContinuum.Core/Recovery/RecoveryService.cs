@@ -72,6 +72,11 @@ public sealed class RecoveryService
 
         switch (op.State)
         {
+            // A recorded process ran, or was about to, and job close ended it with the daemon, so no listing can
+            // tell more and the work it may have done needs you.
+            case OpState.Intent when op.Pid is not null:
+                RecoverIntent(op, task, processExisted: true);
+                break;
             case OpState.Intent:
                 if ((processes.Value is { } list ? SessionHasProcess(list, task) : null) is not { } hasProcess)
                 {
@@ -91,9 +96,9 @@ public sealed class RecoveryService
         }
     }
 
-    private void RecoverIntent(LaunchOp op, TaskRecord task, bool sessionHasProcess)
+    private void RecoverIntent(LaunchOp op, TaskRecord task, bool processExisted)
     {
-        if (sessionHasProcess)
+        if (processExisted)
         {
             _tasks.SetState(op.TaskId, TaskState.NeedsAttention, InterruptedLaunchReason);
             _ledger.Interrupt(op.OpId);
