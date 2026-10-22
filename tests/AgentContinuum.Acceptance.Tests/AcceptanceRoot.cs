@@ -53,7 +53,7 @@ public sealed class AcceptanceRoot : IDisposable
 
     public string Profile => _dir.File("profile");
 
-    public string CliPath => Path.Combine(_dir.File("cli"), "claude.exe");
+    public string CliPath => Path.Combine(_dir.File("cli"), $"claude-{Path.GetFileName(Root)[..8]}.exe");
 
     public string RulesFile => _dir.File("rules.json");
 
@@ -267,13 +267,16 @@ public sealed class AcceptanceRoot : IDisposable
             """{"claudeAiOauth":{"accessToken":"test-token","subscriptionType":"max"}}""");
     }
 
-    // Each root gets its own copy, so the process checks of side-by-side roots never see each other's runs.
+    // The process check treats any CLI-named process it cannot read as a possible session, and other tests'
+    // FakeClaude runs and your own Claude Code are all claude.exe. A name of its own keeps each root to its own
+    // runs. The renamed apphost still loads claude.dll beside it.
     private void CopyFakeClaude()
     {
         var target = Directory.CreateDirectory(_dir.File("cli")).FullName;
         foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory, "claude.*"))
         {
-            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+            var name = Path.GetFileName(file);
+            File.Copy(file, Path.Combine(target, name == "claude.exe" ? Path.GetFileName(CliPath) : name));
         }
     }
 
