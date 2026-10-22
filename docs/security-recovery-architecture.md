@@ -74,7 +74,7 @@ Table `launch_ops`, one row per launch, SQLite in WAL mode with `synchronous=FUL
 | `op_id` | Random 128-bit ID, primary key |
 | `task_id`, `window_id`, `attempt_no` | What the launch counts against |
 | `state` | INTENT, SPAWNED, EXITED, CLASSIFIED, ABANDONED, INTERRUPTED |
-| `pid`, `proc_created_at`, `session_id` | Process identity, set at SPAWNED |
+| `pid`, `proc_created_at`, `session_id` | Process identity. PID and creation time are set on the INTENT row once the process is in its job and before it runs; the session at SPAWNED |
 | `exit_code`, `outcome`, `reason` | Set at EXITED and CLASSIFIED |
 
 A partial unique index allows at most one row per task in INTENT, SPAWNED or EXITED. The attempt counter is incremented in the same transaction that writes INTENT.
@@ -85,7 +85,7 @@ A partial unique index allows at most one row per task in INTENT, SPAWNED or EXI
 | --- | --- | --- | --- |
 | Before INTENT committed | Nothing | Nothing to undo; no attempt counted | Unchanged |
 | After INTENT, before spawn | INTENT, no PID | Confirm no `ac-agent` process carries the session; mark ABANDONED; attempt stays counted | WAITING\_FOR\_RESET |
-| After spawn, before SPAWNED committed | INTENT, no PID | Process was killed by job close but may have done work; take a fresh snapshot | NEEDS\_ATTENTION ("Interrupted launch") |
+| After spawn, before SPAWNED committed | INTENT, PID set | Process was killed by job close but may have done work; take a fresh snapshot | NEEDS\_ATTENTION ("Interrupted launch") |
 | While running | SPAWNED | Same as above | NEEDS\_ATTENTION ("Interrupted run") |
 | After exit, before classification | EXITED | Classify from the recorded exit and events | Per outcome |
 
