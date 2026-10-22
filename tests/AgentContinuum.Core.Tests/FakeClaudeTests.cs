@@ -15,6 +15,37 @@ public sealed class FakeClaudeTests : IDisposable
         Assert.Equal(["2.1.304 (Claude Code)"], stdout);
     }
 
+    [Fact]
+    public void AuthStatus_ReportsSubscriptionByDefault()
+    {
+        var env = FakeClaudeProcess.MinimalEnv();
+        env["USERPROFILE"] = _dir.Path;
+
+        var (exitCode, stdout) = FakeClaudeProcess.Run(_dir.Path, ["auth", "status"], env: env);
+
+        Assert.Equal(0, exitCode);
+        using var doc = System.Text.Json.JsonDocument.Parse(string.Join("\n", stdout));
+        var root = doc.RootElement;
+        Assert.True(root.GetProperty("loggedIn").GetBoolean());
+        Assert.Equal("claude.ai", root.GetProperty("authMethod").GetString());
+        Assert.Equal("firstParty", root.GetProperty("apiProvider").GetString());
+        Assert.True(root.TryGetProperty("subscriptionType", out _));
+    }
+
+    [Fact]
+    public void AuthStatus_OverrideFileInProfileWins()
+    {
+        var env = FakeClaudeProcess.MinimalEnv();
+        env["USERPROFILE"] = _dir.Path;
+        const string overridden = """{"loggedIn":true,"authMethod":"api_key","apiProvider":"firstParty"}""";
+        File.WriteAllText(_dir.File(".fake-claude-auth.json"), overridden);
+
+        var (exitCode, stdout) = FakeClaudeProcess.Run(_dir.Path, ["auth", "status"], env: env);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal([overridden], stdout);
+    }
+
     private const string Session = "6f9c1f3e-2b7a-4c55-9d0e-1a2b3c4d5e6f";
 
     private static string[] HeadlessArgs(string sessionFlag = "--session-id") =>
