@@ -76,6 +76,22 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal([(TaskId, "sample", PreflightReasons.ProcessUnknown)], _notifier.Attentions);
     }
 
+    // A crash between the process starting and SPAWNED must leave proof on the row that a process existed.
+    [Fact]
+    public async Task Start_ProcessOnIntentRowBeforeStartReturns()
+    {
+        (OpState, int?, long?)? atStart = null;
+        _host.OnStart = _ =>
+        {
+            var op = _f.Ledger.Live(TaskId)!;
+            atStart = (op.State, op.Pid, op.ProcCreatedAtFileTime);
+        };
+
+        await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
+
+        Assert.Equal((OpState.Intent, _host.Run.Pid, _host.Run.CreatedAtFileTime), atStart);
+    }
+
     [Theory]
     [InlineData(TaskState.Revoked)]
     [InlineData(TaskState.Completed)]
