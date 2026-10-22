@@ -19,6 +19,19 @@ public sealed class PreflightRunnerTests : IDisposable
         return new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, host ?? Host()).Run(PreflightFixture.TaskId, now);
     }
 
+    // Pre-flight and the launch that follows it must judge the run by the same rules.
+    [Fact]
+    public void Preflight_BillingUsesTheRulesItWasGiven()
+    {
+        _f.EnsureAdded();
+        var withoutP5 = Rules.VersionRules.For("2.1.304")! with { P5 = null };
+        var runner = new PreflightRunner(_f.Store, _f.Lister, _f.Runner, _f.Billing, _f.Clock, Host(), _ => withoutP5);
+
+        var result = runner.Run(PreflightFixture.TaskId, false);
+
+        Assert.Equal([$"{PreflightReasons.BillingUnverified}: P5_UNEVALUABLE"], result.Reasons);
+    }
+
     private string Baseline() => WorkspaceFingerprint.Compute(_f.Repo.Path, GitRepo.GitExe).Hash!;
 
     private void AssertNothingCounted()
