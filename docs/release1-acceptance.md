@@ -26,7 +26,7 @@ Run on 2026-10-22, Windows 11 Home build 26300, Release build.
 | Check | Test | Result |
 | --- | --- | --- |
 | AC4 | `AC4_KillDaemonAtEachCrashPoint`: 5 crash points, 20 runs each, 3 points at a time | Pass, 1 min 43 s |
-| AC5 | `AC5_ThousandCrashCycles_NeverExceedMaxAttempts`: 1,000 cycles in 3 streams, seeds 5000 to 5002; each crash point ended a daemon at least once | Pass, 9 min 40 s |
+| AC5 | `AC5_ThousandCrashCycles_NeverExceedMaxAttempts`: 1,000 cycles in 3 streams, seeds 5000 to 5002; each crash point ended a daemon at least once | Pass, 9 min 40 s. Rerun alone on 2026-10-23 from the Release build: pass, 13 min 30 s |
 | AC6 | `AC6_LimitEndsJobWithin10s`: main process and 2 children gone within 10 s of the hook row | Pass |
 | AC9 | `AC9_EachProofAloneBlocks`: P2 to P6 each alone, plus a passing control | Pass |
 | AC10 | `AC10_P5MismatchTerminates` | Pass |
