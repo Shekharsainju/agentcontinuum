@@ -234,6 +234,24 @@ public sealed class FakeClaudeTests : IDisposable
         }
     }
 
+    [Fact]
+    public void ChildLinger_ChildrenOutliveMainThenTouchFile()
+    {
+        Scenario("""
+            { "events": [], "exitCode": 0, "spawnChildren": 1, "childLingerSeconds": 2, "childTouchFile": "child-done.txt" }
+            """);
+
+        // The child inherits stdout, so waiting on the stream would also wait for the child.
+        using var process = FakeClaudeProcess.Start(_dir.Path, HeadlessArgs());
+        Assert.True(process.WaitForExit(TimeSpan.FromSeconds(10)));
+
+        var childPid = System.Text.Json.JsonSerializer.Deserialize<int[]>(File.ReadAllText(_dir.File("fake-claude-children.json")))!.Single();
+        using var child = System.Diagnostics.Process.GetProcessById(childPid);
+        Assert.False(File.Exists(_dir.File("child-done.txt")));
+        Assert.True(child.WaitForExit(TimeSpan.FromSeconds(10)));
+        Assert.True(File.Exists(_dir.File("child-done.txt")));
+    }
+
     [Theory]
     [InlineData("--dangerously-skip-permissions")]
     [InlineData("--continue")]
