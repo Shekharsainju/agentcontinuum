@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using AgentContinuum.AcTestHost;
 using AgentContinuum.Cli;
 using AgentContinuum.Core.Model;
@@ -89,7 +88,7 @@ public sealed class AC4CrashPointTests
                 break;
             case CrashPoint.WhileRunning:
                 AssertInterrupted(task, ops, RecoveryService.InterruptedRunReason, seen);
-                Assert.True(Gone(ops[0].Pid!.Value), $"{seen}: the run's process outlived the daemon");
+                Assert.True(AcceptanceRoot.Gone(ops[0].Pid!.Value), $"{seen}: the run's process outlived the daemon");
                 break;
             case CrashPoint.AfterExit:
                 Assert.True(
@@ -107,17 +106,5 @@ public sealed class AC4CrashPointTests
             seen);
 
     private static string StateText(TaskState state) => Core.State.StateText.ToText(state);
-
-    private static bool Gone(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return process.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return true;
-        }
-    }
 }
+

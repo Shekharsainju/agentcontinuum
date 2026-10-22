@@ -29,7 +29,7 @@ public sealed class AC6LimitKillTests : IDisposable
         var sinceHook = Stopwatch.StartNew();
 
         int[] pids = [_root.Ops(taskId).Single().Pid!.Value, .. ChildPids(worktree)];
-        AcceptanceRoot.Eventually(() => pids.All(Gone), TimeSpan.FromSeconds(20), "the end of every process");
+        AcceptanceRoot.Eventually(() => pids.All(AcceptanceRoot.Gone), TimeSpan.FromSeconds(20), "the end of every process");
 
         Assert.Equal(3, pids.Length);
         Assert.True(sinceHook.Elapsed <= TimeSpan.FromSeconds(10), $"took {sinceHook.Elapsed.TotalSeconds:0.0} s");
@@ -46,17 +46,5 @@ public sealed class AC6LimitKillTests : IDisposable
 
     private static int[] ChildPids(Core.Tests.GitRepo worktree) =>
         JsonSerializer.Deserialize<int[]>(File.ReadAllText(worktree.File("fake-claude-children.json")))!;
-
-    private static bool Gone(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return process.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return true;
-        }
-    }
 }
+

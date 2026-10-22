@@ -197,6 +197,20 @@ public sealed class AcceptanceRoot : IDisposable
         return File.Exists(log) ? File.ReadAllLines(log).Length : 0;
     }
 
+    /// <summary>True once the process has exited; a reused PID belongs to a later process, which is checked by its handle.</summary>
+    public static bool Gone(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+    }
+
     public static void Eventually(Func<bool> condition, TimeSpan timeout, string what)
     {
         var watch = Stopwatch.StartNew();
