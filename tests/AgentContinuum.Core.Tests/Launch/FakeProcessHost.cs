@@ -17,7 +17,7 @@ public sealed class FakeProcessHost : IProcessHost
 
     public Exception? StartThrows { get; set; }
 
-    public IHostedRun Start(LaunchSpec spec)
+    public IHostedRun Start(LaunchSpec spec, Action<int, long>? created = null)
     {
         if (StartThrows is { } e)
         {
@@ -28,6 +28,7 @@ public sealed class FakeProcessHost : IProcessHost
         {
             StdinTexts.Add(reader.ReadToEnd());
         }
+        created?.Invoke(Run.Pid, Run.CreatedAtFileTime);
         OnStart?.Invoke(spec);
         return Run;
     }

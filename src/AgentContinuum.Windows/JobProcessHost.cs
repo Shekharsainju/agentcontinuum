@@ -20,7 +20,7 @@ public sealed class JobProcessHost : IProcessHost
         _beforeResume = beforeResume;
     }
 
-    public IHostedRun Start(LaunchSpec spec)
+    public IHostedRun Start(LaunchSpec spec, Action<int, long>? created = null)
     {
         if (!Path.IsPathFullyQualified(spec.Exe))
         {
@@ -45,7 +45,7 @@ public sealed class JobProcessHost : IProcessHost
             var info = CreateSuspended(spec, commandLine, environment, stdinRead, stdoutWrite, nul);
             var process = new SafeProcessHandle(info.hProcess, ownsHandle: true);
             using var thread = new SafeThreadHandle(info.hThread);
-            var job = JoinNewJob(process, thread);
+            var job = JoinNewJob(process, thread, () => created?.Invoke(info.dwProcessId, CreationTime(process)));
             started = true;
             return new JobHostedRun(process, job, info.dwProcessId, stdoutRead, stdinWrite, spec.Stdin);
         }
@@ -63,7 +63,7 @@ public sealed class JobProcessHost : IProcessHost
         }
     }
 
-    private SafeJobHandle JoinNewJob(SafeProcessHandle process, SafeThreadHandle thread)
+    private SafeJobHandle JoinNewJob(SafeProcessHandle process, SafeThreadHandle thread, Action created)
     {
         SafeJobHandle? job = null;
         try
@@ -74,6 +74,7 @@ public sealed class JobProcessHost : IProcessHost
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not assign the process to its job.");
             }
             _beforeResume?.Invoke(process.DangerousGetHandle());
+            created();
             if (ResumeThread(thread) == uint.MaxValue)
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the process.");
@@ -89,6 +90,9 @@ public sealed class JobProcessHost : IProcessHost
             throw;
         }
     }
+
+    internal static long CreationTime(SafeProcessHandle process) =>
+        GetProcessTimes(process, out var created, out _, out _, out _) ? created : 0;
 
     private static SafeJobHandle CreateKillOnCloseJob()
     {
@@ -206,7 +210,7 @@ internal sealed class JobHostedRun : IHostedRun
         _process = process;
         _job = job;
         Pid = pid;
-        CreatedAtFileTime = GetProcessTimes(process, out var created, out _, out _, out _) ? created : 0;
+        CreatedAtFileTime = JobProcessHost.CreationTime(process);
         _stdout = new FileStream(stdoutRead, FileAccess.Read, 4096, isAsync: false);
         _exit = new Lazy<Task<int>>(WaitAsync);
         _ = FeedStdin(stdin, new FileStream(stdinWrite, FileAccess.Write, 4096, isAsync: false));

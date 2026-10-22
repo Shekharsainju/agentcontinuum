@@ -46,13 +46,13 @@ public sealed class CrashingHost : IProcessHost
         _point = point;
     }
 
-    public IHostedRun Start(LaunchSpec spec)
+    public IHostedRun Start(LaunchSpec spec, Action<int, long>? created = null)
     {
         if (_point == CrashPoint.BeforeSpawn)
         {
             Crash.Now();
         }
-        var run = _inner.Start(spec);
+        var run = _inner.Start(spec, created);
         if (_point == CrashPoint.AfterSpawn)
         {
             Crash.Now();
