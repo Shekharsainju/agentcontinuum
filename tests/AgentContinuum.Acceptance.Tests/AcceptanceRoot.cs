@@ -25,7 +25,7 @@ public sealed class AcceptanceRoot : IDisposable
     private readonly List<Process> _daemons = [];
     private TestHostConfig _config;
 
-    public AcceptanceRoot()
+    public AcceptanceRoot(bool attest = true)
     {
         Directory.CreateDirectory(LocalAppData);
         Directory.CreateDirectory(Path.Combine(LocalAppData, "AgentContinuum"));
@@ -41,7 +41,10 @@ public sealed class AcceptanceRoot : IDisposable
             TickIntervalSeconds: 0.5);
         WriteConfig();
         Clock = new OffsetClock(ClockOffsetFile);
-        Ok(Ac("attest-overage-off"));
+        if (attest)
+        {
+            Ok(Ac("attest-overage-off"));
+        }
     }
 
     public string Root => _dir.Path;
