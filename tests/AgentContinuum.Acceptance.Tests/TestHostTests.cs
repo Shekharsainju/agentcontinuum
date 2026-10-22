@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using AgentContinuum.AcTestHost;
 using AgentContinuum.Core.Tests;
 
 namespace AgentContinuum.Acceptance.Tests;
@@ -15,7 +16,7 @@ public sealed class TestHostTests : IDisposable
     {
         var (exit, _) = AcTestProcess.Run(_dir.Path, "status");
 
-        Assert.NotEqual(0, exit);
+        Assert.Equal(TestHostConfig.NoConfigExitCode, exit);
         Assert.Empty(Directory.EnumerateFileSystemEntries(_dir.Path));
     }
 
@@ -46,7 +47,7 @@ public sealed class TestHostTests : IDisposable
 
         var (exit, _) = AcTestProcess.Run(_dir.Path, "status");
 
-        Assert.NotEqual(0, exit);
+        Assert.Equal(TestHostConfig.NoConfigExitCode, exit);
         Assert.Equal(["ac-test.json"], Directory.EnumerateFileSystemEntries(configDir).Select(Path.GetFileName));
         Assert.Equal(stateExisted, Directory.Exists(Path.Combine(real, "AgentContinuum", "state")));
     }
