@@ -6,6 +6,16 @@ if (args is ["--version"])
     return 0;
 }
 
+// The override lives in the profile the controller scans, so a test can fail P4 alone.
+if (args is ["auth", "status"])
+{
+    var overridePath = Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE") ?? "", ".fake-claude-auth.json");
+    Console.WriteLine(File.Exists(overridePath)
+        ? File.ReadAllText(overridePath).Trim()
+        : """{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"max"}""");
+    return 0;
+}
+
 if (args is ["--fake-child", var childSeconds])
 {
     Thread.Sleep(TimeSpan.FromSeconds(int.Parse(childSeconds)));
