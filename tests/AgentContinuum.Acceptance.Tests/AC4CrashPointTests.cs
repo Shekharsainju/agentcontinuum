@@ -35,14 +35,14 @@ public sealed class AC4CrashPointTests
     private static void RunPoint(CrashPoint point)
     {
         using var root = new AcceptanceRoot();
-        string? previous = null;
+        (string Id, Core.Tests.GitRepo Worktree)? previous = null;
         for (var run = 0; run <= RunsPerPoint; run++)
         {
             root.Config = root.Config with { CrashPoint = run < RunsPerPoint ? point : CrashPoint.None };
             var daemon = root.StartDaemon();
             if (previous is not null)
             {
-                CheckRecovered(root, point, previous, $"run {run - 1}");
+                CheckRecovered(root, point, previous.Value.Id, previous.Value.Worktree, $"run {run - 1}");
             }
             if (run == RunsPerPoint)
             {
@@ -50,8 +50,9 @@ public sealed class AC4CrashPointTests
                 return;
             }
 
-            previous = root.AddTask(root.Worktree(AcceptanceRoot.SuccessScenario()));
-            root.Submit(RequestKinds.Start, previous);
+            var worktree = root.Worktree(AcceptanceRoot.SuccessScenario());
+            previous = (root.AddTask(worktree), worktree);
+            root.Submit(RequestKinds.Start, previous.Value.Id);
             if (!daemon.WaitForExit(TimeSpan.FromSeconds(60)))
             {
                 AcceptanceRoot.StopDaemon(daemon);
@@ -61,7 +62,8 @@ public sealed class AC4CrashPointTests
         }
     }
 
-    private static void CheckRecovered(AcceptanceRoot root, CrashPoint point, string taskId, string run)
+    private static void CheckRecovered(
+        AcceptanceRoot root, CrashPoint point, string taskId, Core.Tests.GitRepo worktree, string run)
     {
         var task = root.Task(taskId);
         var ops = root.Ops(taskId);
@@ -70,7 +72,11 @@ public sealed class AC4CrashPointTests
         switch (point)
         {
             case CrashPoint.BeforeIntent:
-                Assert.True(task is { State: TaskState.Queued, AttemptsUsed: 0 } && ops.Count == 0, seen);
+                Assert.True(
+                    task is { State: TaskState.Queued, AttemptsUsed: 0 }
+                    && ops.Count == 0
+                    && AcceptanceRoot.StartsLogged(worktree) == 0,
+                    seen);
                 break;
             case CrashPoint.BeforeSpawn:
                 // The first tick offers it at once, saying the launch did not start.
@@ -85,6 +91,8 @@ public sealed class AC4CrashPointTests
                 break;
             case CrashPoint.AfterSpawn:
                 AssertInterrupted(task, ops, RecoveryService.InterruptedLaunchReason, seen);
+                // The PID written before the process ran is what tells this point from the one before the start.
+                Assert.True(ops[0].Pid is { } pid && AcceptanceRoot.Gone(pid), $"{seen}: no recorded process, or it outlived the daemon");
                 break;
             case CrashPoint.WhileRunning:
                 AssertInterrupted(task, ops, RecoveryService.InterruptedRunReason, seen);
