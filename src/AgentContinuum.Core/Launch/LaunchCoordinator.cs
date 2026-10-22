@@ -305,7 +305,8 @@ public sealed class LaunchCoordinator
                 ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
                 : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
             var run = _host.Start(
-                new LaunchSpec(task.CliPath, BuildArgs(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin));
+                new LaunchSpec(task.CliPath, BuildArgs(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin),
+                (pid, created) => _ledger.MarkCreated(opId, pid, created));
             return (run, stdin);
         }
         catch (Exception e)
