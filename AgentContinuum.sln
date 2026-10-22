@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentContinuum.Windows.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentContinuum.Cli.Tests", "tests\AgentContinuum.Cli.Tests\AgentContinuum.Cli.Tests.csproj", "{ED70D485-E2DB-4F98-AB1B-F5E578A73D5B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentContinuum.Acceptance.Tests", "tests\AgentContinuum.Acceptance.Tests\AgentContinuum.Acceptance.Tests.csproj", "{E4ACB558-C11B-42A3-9FCB-3D30FE50152C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,6 +60,10 @@ Global
 		{ED70D485-E2DB-4F98-AB1B-F5E578A73D5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ED70D485-E2DB-4F98-AB1B-F5E578A73D5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ED70D485-E2DB-4F98-AB1B-F5E578A73D5B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4ACB558-C11B-42A3-9FCB-3D30FE50152C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4ACB558-C11B-42A3-9FCB-3D30FE50152C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4ACB558-C11B-42A3-9FCB-3D30FE50152C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4ACB558-C11B-42A3-9FCB-3D30FE50152C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{7C8B547E-84AF-4074-A2CD-5A8ED4B9D172} = {30FDA072-B4F4-49F7-98E8-DA5B67464EA8}
@@ -67,5 +73,6 @@ Global
 		{83DAB498-A371-4EA2-A715-503943C08423} = {420F97FA-3FF2-4098-8AAB-9EC0D6A2E799}
 		{6ABF852E-2F6B-4B6B-A3E2-0C22E43107C7} = {420F97FA-3FF2-4098-8AAB-9EC0D6A2E799}
 		{ED70D485-E2DB-4F98-AB1B-F5E578A73D5B} = {420F97FA-3FF2-4098-8AAB-9EC0D6A2E799}
+		{E4ACB558-C11B-42A3-9FCB-3D30FE50152C} = {420F97FA-3FF2-4098-8AAB-9EC0D6A2E799}
 	EndGlobalSection
 EndGlobal
