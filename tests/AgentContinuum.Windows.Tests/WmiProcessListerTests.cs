@@ -43,6 +43,44 @@ public sealed class WmiProcessListerTests : IDisposable
         Assert.DoesNotContain(processes, p => p.Pid == Environment.ProcessId);
     }
 
+    private static readonly System.Security.Principal.SecurityIdentifier User = new("S-1-5-21-1-2-3-1001");
+
+    private static readonly HashSet<string> CliNames = new(["claude.exe"], StringComparer.OrdinalIgnoreCase);
+
+    // Elevated and protected processes of your own, such as ctfmon or an elevated Task Manager, show WMI no path
+    // or command line, and treating each as a possible session would refuse every launch.
+    [Fact]
+    public void Row_OwnUnreadableNonCli_Dropped()
+    {
+        var row = new WmiProcessLister.Row(42, "ctfmon.exe", 7, null, null);
+
+        Assert.Null(WmiProcessLister.Own(row, User, User, CliNames));
+    }
+
+    [Fact]
+    public void Row_OwnUnreadableCli_KeptAsUnknown()
+    {
+        var row = new WmiProcessLister.Row(42, "Claude.exe", 7, null, null);
+
+        Assert.Equal(new ProcessInfo(42, 7, null, null), WmiProcessLister.Own(row, User, User, CliNames));
+    }
+
+    [Fact]
+    public void Row_OwnReadable_KeptWhateverItsName()
+    {
+        var row = new WmiProcessLister.Row(42, "node.exe", 7, @"C:\node.exe", "node --session 1");
+
+        Assert.Equal(new ProcessInfo(42, 7, @"C:\node.exe", "node --session 1"), WmiProcessLister.Own(row, User, User, CliNames));
+    }
+
+    [Fact]
+    public void Row_OtherUser_Dropped()
+    {
+        var row = new WmiProcessLister.Row(42, "claude.exe", 7, @"C:\claude.exe", "claude");
+
+        Assert.Null(WmiProcessLister.Own(row, new("S-1-5-21-1-2-3-1002"), User, CliNames));
+    }
+
     [Fact]
     public void Lister_StalledListing_FailsInsteadOfHanging()
     {
