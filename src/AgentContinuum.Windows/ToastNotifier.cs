@@ -9,14 +9,7 @@ public sealed class ToastNotifier : INotifier
 {
     public void OfferResume(Offer offer)
     {
-        var title = offer switch
-        {
-            { LaunchDidNotStart: true } => $"{offer.Label}: the launch did not start",
-            { ResetTimeUnknown: true } => $"{offer.Label}: usage limit hit, reset time unknown",
-            _ => $"{offer.Label}: usage limit has reset",
-        };
-        new ToastContentBuilder()
-            .AddText(title)
+        AddLines(new ToastContentBuilder(), OfferText(offer))
             .AddButton(new ToastButton("Resume", ResumeArguments(offer.TaskId)))
             .AddButton(new ToastButtonDismiss("Dismiss"))
             .Show(toast => toast.Tag = offer.TaskId);
@@ -25,12 +18,24 @@ public sealed class ToastNotifier : INotifier
     // No Resume button: a task needing attention is resumed only with ac resume, after you have looked at it.
     public void Attention(string taskId, string label, string reasonCode)
     {
-        new ToastContentBuilder()
-            .AddText($"{label} needs attention")
-            .AddText(reasonCode)
+        AddLines(new ToastContentBuilder(), AttentionText(label, reasonCode))
             .AddButton(new ToastButtonDismiss("Dismiss"))
             .Show(toast => toast.Tag = taskId);
     }
+
+    /// <summary>The text lines of a resume offer, as the toast shows them.</summary>
+    public static string[] OfferText(Offer offer) =>
+    [
+        offer switch
+        {
+            { LaunchDidNotStart: true } => $"{offer.Label}: the launch did not start",
+            { ResetTimeUnknown: true } => $"{offer.Label}: usage limit hit, reset time unknown",
+            _ => $"{offer.Label}: usage limit has reset",
+        },
+    ];
+
+    /// <summary>The text lines of an attention notice, as the toast shows them.</summary>
+    public static string[] AttentionText(string label, string reasonCode) => [$"{label} needs attention", reasonCode];
 
     public static string ResumeArguments(string taskId) => $"action=resume&task={taskId}";
 
@@ -40,4 +45,13 @@ public sealed class ToastNotifier : INotifier
     /// <summary>Calls <paramref name="handler"/> with the clicked button's arguments.</summary>
     public static void OnClick(Action<string> handler) =>
         ToastNotificationManagerCompat.OnActivated += activation => handler(activation.Argument);
+
+    private static ToastContentBuilder AddLines(ToastContentBuilder builder, IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            builder.AddText(line);
+        }
+        return builder;
+    }
 }
