@@ -52,3 +52,11 @@ Two questions are still pending until the limit capture runs near a real limit: 
 | Limit signal | Empty until the limit capture. Every limit-like stop is AMBIGUOUS |
 
 The rules entry is `src/AgentContinuum.Core/Rules/claude-code.json`.
+
+## Claude Code 2.1.309
+
+Oct 23, 2026. The static and init captures were rerun on 2.1.309, at the same path, SHA-256 `5441781F2B6BBD07354B4A74560EE88C68C9BF05D6DB3C7E24C452C91673DC53`. Evidence: `probes/e1/results/static-2.1.309.json` and `init-2.1.309.json`.
+
+Every field the rules read matches 2.1.304. That covers the auth status output for both runs, `apiKeySource` on `system/init`, the `rate_limit_event` fields, the result fields for both runs, the settings key names and the Credential Manager facts. The only differences are values that change from run to run (timestamps, utilisation, IDs) and one new credential key, `claudeAiOauth.subscriptionTypeSource`, which the rules do not read.
+
+2.1.309 has its own rules entry, `>=2.1.309 <2.1.310`, with the 2.1.304 fields. Versions 2.1.305 to 2.1.308 were not captured and stay outside every range. The limit signal is empty, as on 2.1.304.

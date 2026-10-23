@@ -49,7 +49,7 @@ The pieces:
 ## Status
 
 - **Release 1, assisted mode: built.** The automated acceptance suite passes, and a hand check passed on Windows 11 on 2026-10-23: a limit was detected, one offer appeared about 3 minutes later, and a resume continued the same session to completion. Both ran on the test host `ac-test.exe` with FakeClaude, not on real Claude Code.
-- **Not yet usable against real Claude Code.** The shipped rules cover only Claude Code 2.1.304 and have no limit signal yet, because the E1 capture at a real limit has not run. Until it does, `ac.exe` treats every limit-like stop as unverified and asks for your attention. On any other Claude Code version, billing cannot be verified and every launch is refused.
+- **Not yet usable against real Claude Code.** The shipped rules cover only Claude Code 2.1.304 and 2.1.309 and have no limit signal yet, because the E1 capture at a real limit has not run. Until it does, `ac.exe` treats every limit-like stop as unverified and asks for your attention. On any other Claude Code version, billing cannot be verified and every launch is refused.
 - **Release 2, best-effort automatic, and Release 3, isolated automatic: designed, not built.** Release 3 runs the agent in a separate standard account so it cannot change the controller's policy or state. See [docs/security-recovery-architecture.md](docs/security-recovery-architecture.md).
 
 Key documents:
