@@ -70,4 +70,15 @@ Describe 'capture-real-limit' {
       Test-Path "$TestDrive\res2" | Should Be $false
     }
   }
+
+  Context 'run with -File and no output folder' {
+    Set-Content -LiteralPath "$TestDrive\mode.txt" -Value 'ok'
+    $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Command $cli 2>&1) -join "`n"
+    $code = $LASTEXITCODE
+
+    It 'resolves its own folder and runs to the end' {
+      $out | Should Match 'Not at a limit'
+      $code | Should Be 2
+    }
+  }
 }

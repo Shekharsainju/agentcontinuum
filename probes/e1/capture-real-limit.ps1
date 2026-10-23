@@ -4,13 +4,16 @@
 [CmdletBinding()]
 param(
   [string]$Command = 'claude',
-  [string]$OutDir = (Join-Path $PSScriptRoot 'results'),
+  [string]$OutDir,
   [int]$IdleSeconds = 300
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-Import-Module (Join-Path $PSScriptRoot 'E1Common.psm1') -Force
+# Windows PowerShell leaves $PSScriptRoot empty in param defaults under -File, so the folder is resolved here.
+$here = if ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { 'C:\dev\agentcontinuum\probes\e1' }
+if (-not $OutDir) { $OutDir = Join-Path $here 'results' }
+Import-Module (Join-Path $here 'E1Common.psm1') -Force
 
 $cli = Get-E1Cli -Command $Command
 Write-Output "Claude Code $($cli.version)"
@@ -20,7 +23,7 @@ $dropEnv = @(Get-ChildItem Env: | Where-Object Name -like 'ANTHROPIC_*' | ForEac
 $work = Join-Path $env:TEMP ('ac-e1-real-limit-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $hookOut = Join-Path $work 'hooks.jsonl'
-$recorder = Join-Path $PSScriptRoot 'Write-E1HookRecord.ps1'
+$recorder = Join-Path $here 'Write-E1HookRecord.ps1'
 
 $hooks = [ordered]@{}
 foreach ($name in @('StopFailure', 'Stop', 'SessionEnd')) {
