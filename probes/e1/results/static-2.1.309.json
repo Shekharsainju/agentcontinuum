@@ -1,0 +1,256 @@
+{
+  "schema": "ac-probe-e1/1",
+  "captured_utc": "2026-10-23T10:38:19.1465637Z",
+  "cli": {
+    "path": "C:\\Users\\ultra\\.local\\bin\\claude.exe",
+    "target": null,
+    "is_exe": true,
+    "sha256": "5441781F2B6BBD07354B4A74560EE88C68C9BF05D6DB3C7E24C452C91673DC53",
+    "version": "2.1.309"
+  },
+  "data": {
+    "help": {
+      "commands": [
+        "agents",
+        "attach",
+        "auth",
+        "auto-mode",
+        "doctor",
+        "gateway",
+        "import",
+        "install",
+        "logs",
+        "mcp",
+        "purge",
+        "respawn",
+        "rm",
+        "setup-token",
+        "ultrareview"
+      ],
+      "flags": [
+        "--add-dir",
+        "--agent",
+        "--agents",
+        "--all",
+        "--allow-dangerously-skip-permissions",
+        "--allowed",
+        "--allowed-tools",
+        "--append-system-prompt",
+        "--autocompact",
+        "--ax-screen-reader",
+        "--background",
+        "--bare",
+        "--betas",
+        "--bg",
+        "--brief",
+        "--chrome",
+        "--cloud",
+        "--continue",
+        "--dangerously-skip-permissions",
+        "--debug",
+        "--debug-file",
+        "--desktop",
+        "--disable-slash-commands",
+        "--disallowed",
+        "--disallowed-tools",
+        "--effort",
+        "--environment",
+        "--exclude-dynamic-system-prompt-sections",
+        "--fallback-model",
+        "--file",
+        "--fork-session",
+        "--forward-subagent-text",
+        "--from-pr",
+        "--help",
+        "--ide",
+        "--include-hook-events",
+        "--include-partial-messages",
+        "--input-format",
+        "--json-schema",
+        "--max-budget-usd",
+        "--mcp-config",
+        "--model",
+        "--name",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--output-format",
+        "--permission-mode",
+        "--permission-prompt-tool",
+        "--permission-prompts",
+        "--plugin-dir",
+        "--plugin-url",
+        "--print",
+        "--prompt-suggestions",
+        "--remote-control",
+        "--remote-control-session-name-prefix",
+        "--replay-user-messages",
+        "--restricted",
+        "--resume",
+        "--safe-mode",
+        "--session-id",
+        "--setting-sources",
+        "--settings",
+        "--strict-mcp-config",
+        "--system-prompt",
+        "--system-prompt-snapshot",
+        "--teleport",
+        "--tmux",
+        "--tools",
+        "--verbose",
+        "--version",
+        "--worktree"
+      ]
+    },
+    "auth_help": {
+      "commands": [
+        "help",
+        "login",
+        "logout",
+        "status"
+      ],
+      "flags": [
+        "--help"
+      ]
+    },
+    "auth_status": [
+      {
+        "args": "auth status",
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": {
+          "json": {
+            "loggedIn": true,
+            "authMethod": "claude.ai",
+            "apiProvider": "firstParty",
+            "analyticsDisabled": false,
+            "projectsDirectory": {
+              "length": 31,
+              "redacted": true
+            },
+            "configDirectory": {
+              "length": 22,
+              "redacted": true
+            },
+            "email": {
+              "length": 23,
+              "redacted": true
+            },
+            "orgId": {
+              "length": 36,
+              "redacted": true
+            },
+            "orgName": {
+              "length": 38,
+              "redacted": true
+            },
+            "subscriptionType": "pro"
+          }
+        },
+        "stderr": {
+          "length": 0,
+          "lines": 0,
+          "categories": []
+        }
+      },
+      {
+        "args": "auth status --json",
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": {
+          "json": {
+            "loggedIn": true,
+            "authMethod": "claude.ai",
+            "apiProvider": "firstParty",
+            "analyticsDisabled": false,
+            "projectsDirectory": {
+              "length": 31,
+              "redacted": true
+            },
+            "configDirectory": {
+              "length": 22,
+              "redacted": true
+            },
+            "email": {
+              "length": 23,
+              "redacted": true
+            },
+            "orgId": {
+              "length": 36,
+              "redacted": true
+            },
+            "orgName": {
+              "length": 38,
+              "redacted": true
+            },
+            "subscriptionType": "pro"
+          }
+        },
+        "stderr": {
+          "length": 0,
+          "lines": 0,
+          "categories": []
+        }
+      }
+    ],
+    "shell_env_names": [
+      "CLAUDE_CODE_CHILD_SESSION",
+      "CLAUDE_CODE_ENTRYPOINT",
+      "CLAUDE_CODE_MESSAGING_SOCKET",
+      "CLAUDE_CODE_MESSAGING_TOKEN",
+      "CLAUDE_CODE_SESSION_ATTENDED",
+      "CLAUDE_CODE_SESSION_ID",
+      "CLAUDE_CODE_SSE_PORT",
+      "CLAUDE_PID"
+    ],
+    "credentials_file": {
+      "exists": true,
+      "key_paths": [
+        "claudeAiOauth.accessToken",
+        "claudeAiOauth.refreshToken",
+        "claudeAiOauth.expiresAt",
+        "claudeAiOauth.refreshTokenExpiresAt",
+        "claudeAiOauth.scopes[#]",
+        "claudeAiOauth.scopes[0]",
+        "claudeAiOauth.subscriptionType",
+        "claudeAiOauth.subscriptionTypeSource",
+        "claudeAiOauth.rateLimitTier"
+      ]
+    },
+    "claude_json_auth_keys": [
+      "claudeCodeFirstTokenDate",
+      "oauthAccount",
+      "orgModelDefaultCache",
+      "shiftEnterKeyBindingInstalled"
+    ],
+    "claude_json_named_present": {
+      "primaryApiKey": false,
+      "oauthAccount": true,
+      "customApiKeyResponses": false
+    },
+    "settings": {
+      "managed": {
+        "exists": false,
+        "key_paths": []
+      },
+      "user": {
+        "exists": true,
+        "key_paths": [
+          "attribution.commit",
+          "attribution.pr",
+          "permissions.defaultMode",
+          "enabledPlugins.superpowers@claude-plugins-official",
+          "extraKnownMarketplaces.superpowers-dev.source.source",
+          "extraKnownMarketplaces.superpowers-dev.source.repo",
+          "autoUpdatesChannel",
+          "theme",
+          "switchModelsOnFlag"
+        ]
+      },
+      "user_local": {
+        "exists": false,
+        "key_paths": []
+      }
+    },
+    "credential_manager": []
+  }
+}
