@@ -8,7 +8,7 @@ public sealed class VersionRulesTests
     [Fact]
     public void LoadEmbedded_Parses2_1_304Entry()
     {
-        var entry = Assert.Single(VersionRules.LoadEmbedded().Entries);
+        var entry = VersionRules.LoadEmbedded().Entries[0];
 
         Assert.Equal(">=2.1.304 <2.1.305", entry.Versions);
         Assert.Empty(entry.P2ExtraKeys);
@@ -31,6 +31,19 @@ public sealed class VersionRulesTests
         Assert.Null(entry.Limit);
     }
 
+    [Fact]
+    public void For_2_1_309_GivesThe2_1_304BillingRules()
+    {
+        var entry = VersionRules.For("2.1.309");
+
+        Assert.NotNull(entry);
+        Assert.Equal(">=2.1.309 <2.1.310", entry.Versions);
+        Assert.Equal(WithoutRange(VersionRules.For("2.1.304")!), WithoutRange(entry));
+        Assert.Null(entry.Limit);
+    }
+
+    private static string WithoutRange(ClaudeRules rules) => JsonSerializer.Serialize(rules with { Versions = "" });
+
     private static string Entry(string versions) => $$"""{ "versions": "{{versions}}", "p2ExtraKeys": [] }""";
 
     [Fact]
@@ -46,6 +59,8 @@ public sealed class VersionRulesTests
     [Theory]
     [InlineData("2.1.303")]
     [InlineData("2.1.305")]
+    [InlineData("2.1.308")]
+    [InlineData("2.1.310")]
     [InlineData("2.1")]
     [InlineData("2.1.304-beta")]
     [InlineData("")]
