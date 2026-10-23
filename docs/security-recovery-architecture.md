@@ -74,7 +74,7 @@ Table `launch_ops`, one row per launch, SQLite in WAL mode with `synchronous=FUL
 | `op_id` | Random 128-bit ID, primary key |
 | `task_id`, `window_id`, `attempt_no` | What the launch counts against |
 | `state` | INTENT, SPAWNED, EXITED, CLASSIFIED, ABANDONED, INTERRUPTED |
-| `pid`, `proc_created_at`, `session_id` | Process identity, set at SPAWNED |
+| `pid`, `proc_created_at`, `session_id` | Process identity. PID and creation time are set on the INTENT row once the process is in its job and before it runs; the session at SPAWNED |
 | `exit_code`, `outcome`, `reason` | Set at EXITED and CLASSIFIED |
 
 A partial unique index allows at most one row per task in INTENT, SPAWNED or EXITED. The attempt counter is incremented in the same transaction that writes INTENT.
@@ -85,7 +85,7 @@ A partial unique index allows at most one row per task in INTENT, SPAWNED or EXI
 | --- | --- | --- | --- |
 | Before INTENT committed | Nothing | Nothing to undo; no attempt counted | Unchanged |
 | After INTENT, before spawn | INTENT, no PID | Confirm no `ac-agent` process carries the session; mark ABANDONED; attempt stays counted | WAITING\_FOR\_RESET |
-| After spawn, before SPAWNED committed | INTENT, no PID | Process was killed by job close but may have done work; take a fresh snapshot | NEEDS\_ATTENTION ("Interrupted launch") |
+| After spawn, before SPAWNED committed | INTENT, PID set | Process was killed by job close but may have done work; take a fresh snapshot | NEEDS\_ATTENTION ("Interrupted launch") |
 | While running | SPAWNED | Same as above | NEEDS\_ATTENTION ("Interrupted run") |
 | After exit, before classification | EXITED | Classify from the recorded exit and events | Per outcome |
 
@@ -234,7 +234,23 @@ Nine facts must be confirmed on your machine before this spec is build-ready. Th
 - [ ] `ac-controller` can enumerate `ac-agent` processes and their creation times; whether it can terminate ones it did not create (R11 known gap)
 - [ ] The CLIs honour `CLAUDE_CONFIG_DIR` and `CODEX_HOME` for login, settings and session storage under `ac-agent` (R11, A2)
 - [ ] A setting exists to disable native resume, per CLI version (R11)
-- [ ] A way to tell subscription login from API key without reading the secret (R15 P3)
-- [ ] An auth status command per CLI version (R15 P4)
-- [ ] A first-event field reporting the auth source in headless mode (R15 P5)
-- [ ] A usage-percentage source with no tool content; without one, the pre-limit checkpoint is dropped (R5)
+- [ ] A way to tell subscription login from API key without reading the secret (R15 P3). Claude Code 2.1.304: confirmed for a subscription login by credential key names; a stored API-key login is untested (`docs/e1-findings.md`)
+- [x] An auth status command per CLI version (R15 P4). Claude Code 2.1.304: `claude auth status`, JSON `authMethod` and `subscriptionType` (`docs/e1-findings.md`)
+- [x] A first-event field reporting the auth source in headless mode (R15 P5). Claude Code 2.1.304: `apiKeySource` on the `system/init` event, which is not the first line (`docs/e1-findings.md`)
+- [x] A usage-percentage source with no tool content; without one, the pre-limit checkpoint is dropped (R5). Claude Code 2.1.304: `rate_limit_event` window `utilization` and `resetsAt`, so the pre-limit checkpoint stays possible (`docs/e1-findings.md`)
+
+## E0b gates
+
+E0a confirmed the first two items above for an interactive controller only (`docs/e0a-findings.md`). Two hard gates follow from it. Until E0b passes:
+
+- No unattended controller. The controller must not run as a scheduled task, a service or anything else in Session 0. E0a Run A, the same harness started from a scheduled task, timed out.
+- No I4 claim. No release may state or rely on I4. In E0a C8, the agent account opened the controller's process with `PROCESS_TERMINATE`.
+
+E0b passes when, on this machine:
+
+1. The harness runs to completion from a scheduled task in Session 0, and every check it ran interactively passes there too. Each check records its progress as it finishes, so a timeout shows where the run stopped.
+2. The controller sets a deny ACE for the agent SID on its own process at startup, covering `PROCESS_TERMINATE`, `PROCESS_VM_WRITE` and `PROCESS_VM_OPERATION`. The C8 process-open attempts are then denied in both start modes.
+3. The C7 question is answered: whether `ac-controller` can enumerate an `ac-agent` process it did not create, read its creation time, and terminate it.
+4. Every agent process the harness starts is assigned to its job before it runs, and every kill goes through the job or a retained handle and records its result (the E0a containment caveat).
+
+Release 1 is not blocked by E0b, because it runs the agent under your own account and makes no I4 claim. Releases 2 and 3 are.
