@@ -44,4 +44,14 @@ Each fix went in with a failing test first, in the owning task's code.
 
 ## Hand check
 
-Not yet run. To be done with `ac-test.exe` from a folder of its own, with `ac-test.json` beside it and real toasts on: start the daemon, add a FakeClaude task whose scenario ends in a verified limit with a reset one minute ahead, and confirm that one notification appears about 3 minutes later and that Resume launches it.
+Run on 2026-10-23 by hand, with the Release build of `ac-test.exe` in a folder of its own and `ac-test.json` beside it. State and profile were in temp folders and real toasts were on. The task ran FakeClaude, renamed `claude-handcheck.exe`, which reports 2.1.304. The rules were the shipped 2.1.304 rules with the test limit signal added, as the suite builds them.
+
+| Step | Result |
+| --- | --- |
+| Pre-flight passes and the task launches | Pass |
+| The StopFailure hook with a reset one minute ahead is read as a verified limit; the task waits for the reset with 1 of 5 attempts used | Pass |
+| One resume offer about 3 minutes after the limit, as reset plus the 2 minute margin | Pass. One notification appeared, and one offer line was captured |
+| A Resume request launches the task again, on the same session, and it completes | Pass. Sent with `ac-test resume`, which submits the same request as the button. FakeClaude logged two starts with the same session ID, and the task ended COMPLETED with 2 of 5 attempts |
+| Clicking the notification's Resume button sends that request | Not confirmed |
+
+The button click is the one part not confirmed. The toast slid away before it could be clicked reliably. One click reached `ac-test.exe`, which logged `ignored a notification click`, so Windows did start the process for it. The handler ignores anything other than `action=resume&task=<id>`, and the log does not record what a click carried, so a click on the toast body and a button whose arguments arrive changed cannot be told apart. The open check is in `docs/known-issues.md`.
