@@ -59,6 +59,28 @@ public sealed class EventFilterTests
     }
 
     [Fact]
+    public void Accept_LimitRule_KeepsLimitFieldsOnly()
+    {
+        var filter = new EventFilter(VersionRules.LoadEmbedded().Entries[0] with { Limit = TestLimits.Rule });
+
+        var result = filter.Accept(TestLimits.ResultLine(SessionId))!;
+        var rate = filter.Accept(TestLimits.RateLimitLine(SessionId, "rejected", 1_800_000_000))!;
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["is_error"] = "true",
+                ["terminal_reason"] = "\"api_error\"",
+                ["api_error_status"] = "429",
+                ["api_error"] = "\"usage_limit_reached\"",
+            },
+            result.LimitFields);
+        Assert.Equal(
+            new Dictionary<string, string> { ["rate_limit_info.status"] = "\"rejected\"", ["rate_limit_info.resetsAt"] = "1800000000" },
+            rate.LimitFields);
+    }
+
+    [Fact]
     public void Accept_DropsSentinelEverywhere()
     {
         var filter = Filter();

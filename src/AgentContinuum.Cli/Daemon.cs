@@ -231,7 +231,7 @@ public sealed class Daemon : IDisposable
         var preflight = new PreflightRunner(store, s.Lister, s.Runner, new BillingProofs(s.Runner, s.Clock, store), s.Clock, s.Preflight, s.RulesFor);
         var scheduler = new ResetScheduler(new TaskRepository(store), s.Clock, s.Log);
         return new LaunchCoordinator(
-            store, preflight, s.Host, scheduler, s.Notifier, s.Log, new LaunchPaths(s.AcExe, s.Paths.LaunchRoot), s.Preflight,
+            store, preflight, s.Host, scheduler, s.Notifier, s.Log, s.Preflight,
             s.RulesFor, s.LaunchDelay);
     }
 

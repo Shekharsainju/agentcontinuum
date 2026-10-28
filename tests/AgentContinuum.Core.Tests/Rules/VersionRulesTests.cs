@@ -1,4 +1,7 @@
 using System.Text.Json;
+using AgentContinuum.Core.Classify;
+using AgentContinuum.Core.Events;
+using AgentContinuum.Core.Model;
 using AgentContinuum.Core.Rules;
 
 namespace AgentContinuum.Core.Tests.Rules;
@@ -8,7 +11,7 @@ public sealed class VersionRulesTests
     [Fact]
     public void LoadEmbedded_Parses2_1_304Entry()
     {
-        var entry = Assert.Single(VersionRules.LoadEmbedded().Entries);
+        var entry = VersionRules.LoadEmbedded().Entries[0];
 
         Assert.Equal(">=2.1.304 <2.1.305", entry.Versions);
         Assert.Empty(entry.P2ExtraKeys);
@@ -31,6 +34,47 @@ public sealed class VersionRulesTests
         Assert.Null(entry.Limit);
     }
 
+    [Fact]
+    public void For_2_1_309_GivesThe2_1_304BillingRules()
+    {
+        var entry = VersionRules.For("2.1.309");
+
+        Assert.NotNull(entry);
+        Assert.Equal(">=2.1.309 <2.1.310", entry.Versions);
+        Assert.Equal(WithoutRangeOrLimit(VersionRules.For("2.1.304")!), WithoutRangeOrLimit(entry));
+    }
+
+    private static string WithoutRangeOrLimit(ClaudeRules rules) =>
+        JsonSerializer.Serialize(rules with { Versions = "", Limit = null });
+
+    [Fact]
+    public void For_2_1_309_HasTheStreamLimitSignalFromTheRealCapture()
+    {
+        var entry = VersionRules.For("2.1.309")!;
+
+        Assert.Equal(JsonSerializer.Serialize(TestLimits.Rule), JsonSerializer.Serialize(entry.Limit));
+    }
+
+    // The reset is the one in probes/e1/results/limit-2.1.309.json.
+    [Fact]
+    public void For_2_1_309_ClassifiesTheCapturedLimitWithItsReset()
+    {
+        var rules = VersionRules.For("2.1.309")!;
+        var session = Guid.NewGuid();
+        var id = session.ToString("D");
+        var filter = new EventFilter(rules);
+        var stream = new[]
+        {
+            $$"""{"type":"system","subtype":"init","session_id":"{{id}}","apiKeySource":"none"}""",
+            TestLimits.RateLimitLine(id, "rejected", 1_792_769_400),
+            TestLimits.ResultLine(id),
+        }.Select(line => filter.Accept(line)!).ToList();
+
+        var result = RunClassifier.Classify(rules, session, stream, [], 1);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, RunClassifier.UsageLimitReason, 1_792_769_400), result);
+    }
+
     private static string Entry(string versions) => $$"""{ "versions": "{{versions}}", "p2ExtraKeys": [] }""";
 
     [Fact]
@@ -46,6 +90,8 @@ public sealed class VersionRulesTests
     [Theory]
     [InlineData("2.1.303")]
     [InlineData("2.1.305")]
+    [InlineData("2.1.308")]
+    [InlineData("2.1.310")]
     [InlineData("2.1")]
     [InlineData("2.1.304-beta")]
     [InlineData("")]

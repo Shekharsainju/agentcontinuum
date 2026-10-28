@@ -49,7 +49,7 @@ The pieces:
 ## Status
 
 - **Release 1, assisted mode: built.** The automated acceptance suite passes, and a hand check passed on Windows 11 on 2026-10-23: a limit was detected, one offer appeared about 3 minutes later, and a resume continued the same session to completion. Both ran on the test host `ac-test.exe` with FakeClaude, not on real Claude Code.
-- **Not yet usable against real Claude Code.** The shipped rules cover only Claude Code 2.1.304 and have no limit signal yet, because the E1 capture at a real limit has not run. Until it does, `ac.exe` treats every limit-like stop as unverified and asks for your attention. On any other Claude Code version, billing cannot be verified and every launch is refused.
+- **Limit detection on real Claude Code 2.1.309 only, not yet run end to end.** The 2.1.309 rules entry reads the usage limit from the stream, as a real limit capture showed it: a `result` with `api_error: "usage_limit_reached"` and status 429, and a `rate_limit_event` with status `rejected` that gives the reset time. A full limit, wait and resume cycle has not yet run on real Claude Code, and a limit on a resumed run is not yet captured. On 2.1.304 every limit-like stop is still unverified and asks for your attention. On any other Claude Code version, billing cannot be verified and every launch is refused.
 - **Release 2, best-effort automatic, and Release 3, isolated automatic: designed, not built.** Release 3 runs the agent in a separate standard account so it cannot change the controller's policy or state. See [docs/security-recovery-architecture.md](docs/security-recovery-architecture.md).
 
 Key documents:
@@ -69,7 +69,7 @@ Key documents:
 
 The full list is in [docs/known-issues.md](docs/known-issues.md). The main ones:
 
-- **No real limit detection yet.** As above, the limit signal is still missing from the shipped rules, and a new Claude Code version needs a new rules entry backed by fresh evidence.
+- **Limit detection covers one version.** Only 2.1.309 has a limit signal, verified by one capture of a first launch at a real limit. A new Claude Code version needs a new rules entry backed by fresh evidence.
 - **The Resume button click is unconfirmed.** In the hand check the notification appeared, but it slid away before Resume could be clicked reliably. One click reached the controller and was ignored, and the log cannot show whether it hit the toast body or the button. The resume itself was confirmed with `ac resume`, which sends the same request.
 - **Assisted mode shares your account.** An agent that runs as you could edit the state database. Release 1 does not claim otherwise; the protection is that nothing launches without you.
 - **The process check can miss a renamed CLI.** Your own processes that Windows will not let it read count as a possible session only if their name matches a pinned CLI, so an elevated Claude Code under another name could be missed.

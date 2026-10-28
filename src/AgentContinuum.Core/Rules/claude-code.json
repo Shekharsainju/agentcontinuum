@@ -46,5 +46,72 @@
       }
     },
     "limit": null
+  },
+  {
+    "versions": ">=2.1.309 <2.1.310",
+    "evidence": "docs/e1-findings.md",
+    "p2ExtraKeys": [],
+    "p3": {
+      "file": ".claude/.credentials.json",
+      "subscriptionKeys": ["claudeAiOauth.accessToken", "claudeAiOauth.subscriptionType"],
+      "apiKeyFile": ".claude.json",
+      "apiKeyKeys": ["primaryApiKey"]
+    },
+    "p4": {
+      "args": ["auth", "status"],
+      "require": [
+        { "path": "loggedIn", "values": [true] },
+        { "path": "authMethod", "values": ["claude.ai"] },
+        { "path": "apiProvider", "values": ["firstParty"] }
+      ],
+      "requirePresent": ["subscriptionType"]
+    },
+    "p5": {
+      "type": "system",
+      "subtype": "init",
+      "field": "apiKeySource",
+      "subscriptionValues": ["none"]
+    },
+    "result": {
+      "type": "result",
+      "successWhen": [
+        { "path": "is_error", "values": [false] },
+        { "path": "terminal_reason", "values": ["completed"] }
+      ]
+    },
+    "usage": {
+      "type": "rate_limit_event",
+      "resetField": "rate_limit_info.resetsAt",
+      "resetFormat": "unix_seconds",
+      "utilizationFields": [
+        "rate_limit_info.unifiedWindows.five_hour.utilization",
+        "rate_limit_info.unifiedWindows.seven_day.utilization"
+      ],
+      "overage": {
+        "statusField": "rate_limit_info.overageStatus",
+        "inUseField": "rate_limit_info.isUsingOverage",
+        "safeInUse": [false]
+      }
+    },
+    "limit": {
+      "events": [
+        {
+          "type": "result",
+          "when": [
+            { "path": "api_error", "values": ["usage_limit_reached"] },
+            { "path": "api_error_status", "values": [429] }
+          ]
+        },
+        {
+          "type": "rate_limit_event",
+          "when": [
+            { "path": "rate_limit_info.status", "values": ["rejected"] }
+          ]
+        }
+      ],
+      "resetType": "rate_limit_event",
+      "resetField": "rate_limit_info.resetsAt",
+      "resetFormat": "unix_seconds"
+    }
   }
 ]

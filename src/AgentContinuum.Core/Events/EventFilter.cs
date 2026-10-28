@@ -75,5 +75,13 @@ public sealed class EventFilter
             yield return usage.Overage.StatusField;
             yield return usage.Overage.InUseField;
         }
+        if (rules.Limit is { } limit)
+        {
+            foreach (var requirement in limit.Events.SelectMany(e => e.When))
+            {
+                yield return requirement.Path;
+            }
+            yield return limit.ResetField;
+        }
     }
 }

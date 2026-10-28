@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using AgentContinuum.Core.Billing;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Events;
@@ -21,9 +20,6 @@ public enum LaunchKind
 
 public sealed record LaunchReport(bool Launched, PreflightResult Preflight, string? OpId, Outcome? Outcome);
 
-/// <summary><see cref="LaunchRoot"/> holds one folder per launch op for its settings file.</summary>
-public sealed record LaunchPaths(string AcExe, string LaunchRoot);
-
 /// <summary>Runs the spec's launch steps for a first launch or a resume, each behind the same pre-flight.</summary>
 public sealed class LaunchCoordinator
 {
@@ -40,9 +36,9 @@ public sealed class LaunchCoordinator
 
     public static readonly TimeSpan LimitKillAfter = TimeSpan.FromSeconds(10);
 
-    private static readonly TimeSpan KillRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan LimitKillMargin = TimeSpan.FromSeconds(2);
 
-    private static readonly TimeSpan HookPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan KillRetryDelay = TimeSpan.FromSeconds(1);
 
     private static readonly TimeSpan EmptyJobPollInterval = TimeSpan.FromMilliseconds(100);
 
@@ -55,7 +51,6 @@ public sealed class LaunchCoordinator
     private readonly IProcessHost _host;
     private readonly INotifier _notifier;
     private readonly ILog _log;
-    private readonly LaunchPaths _paths;
     private readonly PreflightHost _preflightHost;
     private readonly Func<string, ClaudeRules?> _rulesFor;
     private readonly Func<TimeSpan, Task> _delay;
@@ -63,7 +58,8 @@ public sealed class LaunchCoordinator
     private readonly LaunchLedger _ledger;
     private readonly OutcomeApplier _outcomes;
 
-    // The stream reader and the limit watcher run at once, and a SqliteConnection is not safe across threads.
+    // A failed run is ended while the stream reader may still be writing, and a SqliteConnection is not safe
+    // across threads.
     private readonly object _db = new();
 
     /// <param name="delay">Waits between checks of a running launch; for tests.</param>
@@ -74,7 +70,6 @@ public sealed class LaunchCoordinator
         IUsageLimitHandler usageLimits,
         INotifier notifier,
         ILog log,
-        LaunchPaths paths,
         PreflightHost preflightHost,
         Func<string, ClaudeRules?>? rulesFor = null,
         Func<TimeSpan, Task>? delay = null)
@@ -84,7 +79,6 @@ public sealed class LaunchCoordinator
         _host = host;
         _notifier = notifier;
         _log = log;
-        _paths = paths;
         _preflightHost = preflightHost;
         _rulesFor = rulesFor ?? VersionRules.For;
         _delay = delay ?? (d => Task.Delay(d));
@@ -123,7 +117,7 @@ public sealed class LaunchCoordinator
             _log.Write($"launch of task {taskId} refused at intent");
             return new LaunchReport(false, new PreflightResult(false, [PreflightReasons.AdmissionState]), null, null);
         }
-        if (TryStart(task, kind, opId, rules) is not { } launched)
+        if (TryStart(task, kind, opId) is not { } launched)
         {
             // As in recovery of an INTENT op with no process: the attempt stays counted and the task is updated
             // before the op leaves its live state.
@@ -161,10 +155,11 @@ public sealed class LaunchCoordinator
         // Started with the stream rather than after it: a grandchild that inherited stdout keeps it open after the
         // main process exits, and only killing the job then ends the stream.
         var emptied = EmptyJobAfterExit(run, opId, exited);
-        var watch = rules?.Limit is { } watched ? WatchForLimit(run, opId, task.SessionId, watched, exited) : Task.CompletedTask;
+        var limitSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watch = rules?.Limit is not null ? WatchForLimit(run, opId, limitSeen.Task, exited, emptied) : Task.CompletedTask;
         try
         {
-            return await Follow(task, opId, run, rules, exited, emptied, watch);
+            return await Follow(task, opId, run, rules, exited, emptied, watch, limitSeen);
         }
         catch (Exception e)
         {
@@ -174,10 +169,17 @@ public sealed class LaunchCoordinator
     }
 
     private async Task<Outcome> Follow(
-        TaskRecord task, string opId, IHostedRun run, ClaudeRules? rules, Task<int> exited, Task<bool> emptied, Task watch)
+        TaskRecord task,
+        string opId,
+        IHostedRun run,
+        ClaudeRules? rules,
+        Task<int> exited,
+        Task<bool> emptied,
+        Task watch,
+        TaskCompletionSource limitSeen)
     {
         var taskId = task.TaskId;
-        var reading = ReadStream(run, opId, rules);
+        var reading = ReadStream(run, opId, rules, task.SessionId, limitSeen);
         // A job that will not empty after exit can hold the stream open for ever, and closing it is the last resort.
         if (await Task.WhenAny(reading, emptied) == emptied && emptied is { IsCompletedSuccessfully: true, Result: false })
         {
@@ -216,8 +218,9 @@ public sealed class LaunchCoordinator
         return classification.Outcome;
     }
 
-    // The watcher and the empty-job wait still use the run and the store, so they finish before the run is
-    // disposed. A run whose job is already being closed has nothing left to kill.
+    // The limit watcher and the empty-job wait still use the run, so they are settled before the caller disposes
+    // it. A run whose job is already being closed has nothing left to kill, and a watcher woken after that finds
+    // the handle closed and its exception is swallowed.
     private async Task StopFailedRun(IHostedRun run, string opId, bool jobClosing, params Task[] background)
     {
         if (jobClosing || !Kill(run, opId, "run error"))
@@ -245,8 +248,8 @@ public sealed class LaunchCoordinator
         }
     }
 
-    // The task is updated before the op leaves its live state, as in recovery. The background limit watcher may
-    // still be reading, so the writes take the same lock. The user is told even when the writes fail, since the
+    // The task is updated before the op leaves its live state, as in recovery. The stream reader may still be
+    // writing, so the writes take the same lock. The user is told even when the writes fail, since the
     // task may then stay RUNNING until the daemon recovers it.
     private void EndFailedRun(TaskRecord task, string opId, string reason)
     {
@@ -294,18 +297,16 @@ public sealed class LaunchCoordinator
     }
 
     // The host ends any process it created before it throws, so a failure here means nothing ran.
-    private (IHostedRun Run, Stream Stdin)? TryStart(TaskRecord task, LaunchKind kind, string opId, ClaudeRules? rules)
+    private (IHostedRun Run, Stream Stdin)? TryStart(TaskRecord task, LaunchKind kind, string opId)
     {
         Stream? stdin = null;
         try
         {
-            // Without a verified limit signal the hook could not be classified, so it is not installed.
-            var settingsPath = rules?.Limit is { } limit ? WriteSettings(opId, limit) : null;
             stdin = kind == LaunchKind.First
                 ? File.OpenRead(Path.GetFullPath(Path.Combine(task.Worktree, task.PromptFile)))
                 : new MemoryStream(Encoding.UTF8.GetBytes(ResumePrompt));
             var run = _host.Start(
-                new LaunchSpec(task.CliPath, BuildArgs(task, kind, settingsPath), task.Worktree, ChildEnv(task), stdin),
+                new LaunchSpec(task.CliPath, BuildArgs(task, kind), task.Worktree, ChildEnv(task), stdin),
                 (pid, created) => _ledger.MarkCreated(opId, pid, created));
             return (run, stdin);
         }
@@ -317,21 +318,8 @@ public sealed class LaunchCoordinator
         }
     }
 
-    private string WriteSettings(string opId, LimitSignalRule limit)
-    {
-        var dir = Directory.CreateDirectory(Path.Combine(_paths.LaunchRoot, opId)).FullName;
-        var path = Path.Combine(dir, "settings.json");
-        var command = new JsonObject { ["type"] = "command", ["command"] = $"\"{_paths.AcExe}\" hook stop-failure --op {opId}" };
-        var settings = new JsonObject
-        {
-            ["hooks"] = new JsonObject { [limit.Hook] = new JsonArray(new JsonObject { ["hooks"] = new JsonArray(command) }) },
-        };
-        File.WriteAllText(path, settings.ToJsonString());
-        return path;
-    }
-
     /// <summary>The CLI arguments for a launch; the prompt goes on stdin.</summary>
-    public static string[] BuildArgs(TaskRecord task, LaunchKind kind, string? settingsPath)
+    public static string[] BuildArgs(TaskRecord task, LaunchKind kind)
     {
         // Pre-flight and the ledger refuse these modes already; the args are the last place one could slip through.
         if (!LaunchPolicy.IsAllowedMode(task.PermissionMode))
@@ -353,10 +341,6 @@ public sealed class LaunchCoordinator
             // One argument per rule: a joined value would split any rule that itself contains a comma.
             args.AddRange(["--allowedTools", .. task.AllowedTools]);
         }
-        if (settingsPath is not null)
-        {
-            args.AddRange(["--settings", settingsPath]);
-        }
         return [.. args];
     }
 
@@ -364,10 +348,12 @@ public sealed class LaunchCoordinator
         _preflightHost.ParentEnv, Path.GetDirectoryName(task.CliPath) ?? "", Path.GetDirectoryName(_preflightHost.GitExe) ?? "");
 
     // Only the filtered view of each line is kept; the raw line never leaves this method.
-    private async Task ReadStream(IHostedRun run, string opId, ClaudeRules? rules)
+    private async Task ReadStream(IHostedRun run, string opId, ClaudeRules? rules, Guid sessionId, TaskCompletionSource limitSeen)
     {
         var filter = rules is null ? null : new EventFilter(rules);
         var billing = FirstEventStatus.Pending;
+        // Only events of a type the limit rule names are kept, so checking after each line stays cheap on a long run.
+        var limitEvents = new List<FilteredEvent>();
         await foreach (var line in run.StdoutLines.ConfigureAwait(false))
         {
             if (filter?.Accept(line) is not { } filtered)
@@ -385,30 +371,34 @@ public sealed class LaunchCoordinator
                 await StopForBilling(run, opId).ConfigureAwait(false);
             }
             billing = observed;
+            if (rules?.Limit is { } limit && !limitSeen.Task.IsCompleted && limit.Events.Any(r => r.Type == filtered.Type))
+            {
+                limitEvents.Add(filtered);
+                if (RunClassifier.IsVerifiedLimit(limit, sessionId, limitEvents))
+                {
+                    limitSeen.TrySetResult();
+                }
+            }
         }
     }
 
-    // The hook is seen up to one poll after it fired, so the wait is shortened by that much to keep the
-    // whole job ended within LimitKillAfter of the signal.
-    private async Task WatchForLimit(IHostedRun run, string opId, Guid sessionId, LimitSignalRule limit, Task exited)
+    // Claude Code 2.1.309 exited on its own 2.7 s after the limit result. The kill is for a run that does not, and
+    // for any process it left in the job. The signal is read a little after it was written and the job takes a
+    // moment to end, so the kill comes LimitKillMargin early to keep the whole job ended within LimitKillAfter.
+    private async Task WatchForLimit(IHostedRun run, string opId, Task limitSeen, Task exited, Task<bool> emptied)
     {
-        while (!exited.IsCompleted)
+        if (await Task.WhenAny(limitSeen, exited).ConfigureAwait(false) != limitSeen)
         {
-            IReadOnlyList<HookEvent> hooks;
-            lock (_db)
-            {
-                hooks = HookRecorder.ForOp(_store, opId);
-            }
-            if (hooks.Any(h => RunClassifier.IsVerifiedLimit(limit, sessionId, h)))
-            {
-                await _delay(LimitKillAfter - HookPollInterval).ConfigureAwait(false);
-                if (run.ActiveProcesses() > 0)
-                {
-                    Kill(run, opId, "limit signal");
-                }
-                return;
-            }
-            await _delay(HookPollInterval).ConfigureAwait(false);
+            return;
+        }
+        await Task.WhenAny(_delay(LimitKillAfter - LimitKillMargin), emptied).ConfigureAwait(false);
+        if (emptied is { IsCompletedSuccessfully: true, Result: true })
+        {
+            return;
+        }
+        if (run.ActiveProcesses() > 0)
+        {
+            Kill(run, opId, "limit signal");
         }
     }
 

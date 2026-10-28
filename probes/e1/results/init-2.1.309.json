@@ -1,0 +1,588 @@
+{
+  "schema": "ac-probe-e1/1",
+  "captured_utc": "2026-10-23T10:38:36.3271133Z",
+  "cli": {
+    "path": "C:\\Users\\ultra\\.local\\bin\\claude.exe",
+    "target": null,
+    "is_exe": true,
+    "sha256": "5441781F2B6BBD07354B4A74560EE88C68C9BF05D6DB3C7E24C452C91673DC53",
+    "version": "2.1.309"
+  },
+  "data": {
+    "removed_shell_env": [
+      "PSModulePath"
+    ],
+    "stored_login": {
+      "run": {
+        "events": [
+          {
+            "seconds": 1.6,
+            "shape": {
+              "type": "system",
+              "subtype": "hook_started",
+              "hook_id": {
+                "redacted": true,
+                "length": 36
+              },
+              "hook_name": "SessionStart:startup",
+              "hook_event": "SessionStart",
+              "uuid": "e47700fd-54de-42bc-9917-23f3a64837e0",
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3"
+            }
+          },
+          {
+            "seconds": 1.7,
+            "shape": {
+              "type": "system",
+              "subtype": "hook_response",
+              "hook_id": {
+                "redacted": true,
+                "length": 36
+              },
+              "hook_name": "SessionStart:startup",
+              "hook_event": "SessionStart",
+              "output": {
+                "redacted": true,
+                "length": 3604
+              },
+              "stdout": {
+                "redacted": true,
+                "length": 3604
+              },
+              "stderr": {
+                "redacted": true,
+                "length": 0
+              },
+              "exit_code": 0,
+              "outcome": "success",
+              "uuid": "c5a32cca-64fc-4941-abbd-c2a8c169b366",
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3"
+            }
+          },
+          {
+            "seconds": 2.5,
+            "shape": {
+              "type": "system",
+              "subtype": "init",
+              "cwd": {
+                "redacted": true,
+                "length": 77
+              },
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3",
+              "tools[#]": 35,
+              "tools[0]": "Task",
+              "mcp_servers[#]": 4,
+              "mcp_servers[0].name": {
+                "redacted": true,
+                "length": 21
+              },
+              "mcp_servers[0].status": "connected",
+              "mcp_servers[0].source": "claudeai",
+              "model": "claude-opus-5-5",
+              "permissionMode": "auto",
+              "slash_commands[#]": 77,
+              "slash_commands[0]": "superpowers:brainstorming",
+              "terminal_slash_commands[#]": 4,
+              "terminal_slash_commands[0]": "doctor",
+              "apiKeySource": "none",
+              "claude_code_version": "2.1.309",
+              "output_style": "default",
+              "agents[#]": 5,
+              "agents[0]": "claude",
+              "skills[#]": 41,
+              "skills[0]": "superpowers:brainstorming",
+              "plugins[#]": 4,
+              "plugins[0].name": "superpowers",
+              "plugins[0].path": {
+                "redacted": true,
+                "length": 78
+              },
+              "plugins[0].source": {
+                "redacted": true,
+                "length": 35
+              },
+              "plugins[0].version": "7.0.0",
+              "capabilities[#]": 13,
+              "capabilities[0]": "interrupt_receipt_v1",
+              "analytics_disabled": false,
+              "product_feedback_disabled": false,
+              "uuid": "f2daafab-b681-41e2-8263-b4d3877b4541",
+              "memory_paths.auto": {
+                "redacted": true,
+                "length": 117
+              },
+              "original_cwd": {
+                "redacted": true,
+                "length": 77
+              },
+              "additional_directories[#]": 0,
+              "messaging_socket_path": {
+                "redacted": true,
+                "length": 54
+              },
+              "fast_mode_state": "off",
+              "fast_mode_disabled_reason": "sdk_opt_in_required",
+              "per_turn_effort_active": true,
+              "view_mode": "default",
+              "powershell_path": {
+                "redacted": true,
+                "length": 94
+              }
+            }
+          },
+          {
+            "seconds": 6.3,
+            "shape": {
+              "type": "assistant",
+              "message.model": "claude-opus-5-5",
+              "message.id": "msg_011CgK2MpX5k6aGUqZWHzHH6",
+              "message.type": "message",
+              "message.role": "assistant",
+              "message.content[#]": 1,
+              "message.content[0].type": "text",
+              "message.content[0].text": "OK",
+              "message.container": null,
+              "message.stop_reason": null,
+              "message.stop_sequence": null,
+              "message.stop_details": null,
+              "message.usage.input_tokens": 2,
+              "message.usage.cache_creation_input_tokens": 11839,
+              "message.usage.cache_read_input_tokens": 14018,
+              "message.usage.cache_creation.ephemeral_5m_input_tokens": 0,
+              "message.usage.cache_creation.ephemeral_1h_input_tokens": 11839,
+              "message.usage.output_tokens": 4,
+              "message.usage.service_tier": "standard",
+              "message.usage.inference_geo": "global",
+              "message.usage.speed": "standard",
+              "message.input_transformations[#]": 0,
+              "message.diagnostics": null,
+              "message.context_management": null,
+              "parent_tool_use_id": null,
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3",
+              "uuid": "70ae7cee-1478-4576-8e27-5ac61575a5f7",
+              "timestamp": "2026-10-23T10:38:30.9970000Z",
+              "request_id": "req_011CgK2MpBjhe3VV4DX4ioqT"
+            }
+          },
+          {
+            "seconds": 6.3,
+            "shape": {
+              "type": "rate_limit_event",
+              "rate_limit_info.status": "allowed",
+              "rate_limit_info.resetsAt": 1792769400,
+              "rate_limit_info.rateLimitType": "five_hour",
+              "rate_limit_info.overageStatus": "rejected",
+              "rate_limit_info.overageDisabledReason": "org_level_disabled",
+              "rate_limit_info.isUsingOverage": false,
+              "rate_limit_info.unifiedWindows.five_hour.utilization": 0.34,
+              "rate_limit_info.unifiedWindows.five_hour.resetsAt": 1792769400,
+              "rate_limit_info.unifiedWindows.seven_day.utilization": 0.57,
+              "rate_limit_info.unifiedWindows.seven_day.resetsAt": 1793084400,
+              "uuid": "81cb043b-8c79-4ad4-85be-f2be85a57477",
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3"
+            }
+          },
+          {
+            "seconds": 6.3,
+            "shape": {
+              "duration_api_ms": 3800,
+              "stop_reason": "end_turn",
+              "session_id": "17aa4b71-2be3-4aa0-b2b1-a3f6e8d678c3",
+              "total_cost_usd": 0.0976036,
+              "usage.input_tokens": 2,
+              "usage.cache_creation_input_tokens": 11839,
+              "usage.cache_read_input_tokens": 14018,
+              "usage.output_tokens": 4,
+              "usage.output_tokens_details.thinking_tokens": 0,
+              "usage.server_tool_use.web_search_requests": 0,
+              "usage.server_tool_use.web_fetch_requests": 0,
+              "usage.service_tier": "standard",
+              "usage.cache_creation.ephemeral_1h_input_tokens": 11839,
+              "usage.cache_creation.ephemeral_5m_input_tokens": 0,
+              "usage.inference_geo": "global",
+              "usage.iterations[#]": 1,
+              "usage.iterations[0].input_tokens": 2,
+              "usage.iterations[0].output_tokens": 4,
+              "usage.iterations[0].cache_read_input_tokens": 14018,
+              "usage.iterations[0].cache_creation_input_tokens": 11839,
+              "usage.iterations[0].cache_creation.ephemeral_5m_input_tokens": 0,
+              "usage.iterations[0].cache_creation.ephemeral_1h_input_tokens": 11839,
+              "usage.iterations[0].type": "message",
+              "usage.speed": "standard",
+              "usage.fallback_credit": null,
+              "modelUsage.claude-opus-5-5.inputTokens": 2,
+              "modelUsage.claude-opus-5-5.outputTokens": 4,
+              "modelUsage.claude-opus-5-5.cacheReadInputTokens": 14018,
+              "modelUsage.claude-opus-5-5.cacheCreationInputTokens": 11839,
+              "modelUsage.claude-opus-5-5.webSearchRequests": 0,
+              "modelUsage.claude-opus-5-5.costUSD": 0.0976036,
+              "modelUsage.claude-opus-5-5.contextWindow": 1000000,
+              "modelUsage.claude-opus-5-5.maxOutputTokens": 128000,
+              "modelUsage.claude-opus-5-5.thinkingTokens": 0,
+              "modelUsage.claude-opus-5-5.canonicalModel": "claude-opus-5-5",
+              "modelUsage.claude-opus-5-5.provider": "firstParty",
+              "modelUsage.claude-opus-5-5.costBasis": "list",
+              "permission_denials[#]": 0,
+              "terminal_reason": "completed",
+              "fast_mode_state": "off",
+              "fast_mode_disabled_reason": "sdk_opt_in_required",
+              "subagent_stats.spawned": 0,
+              "subagent_stats.requested.background": 0,
+              "subagent_stats.requested.foreground": 0,
+              "subagent_stats.requested.unset": 0,
+              "subagent_stats.started_in_background": 0,
+              "subagent_stats.max_depth": 0,
+              "subagent_stats.spawned_by_subagents": 0,
+              "subagent_stats.completed": 0,
+              "subagent_stats.failed": 0,
+              "subagent_stats.killed.parent": 0,
+              "subagent_stats.killed.user": 0,
+              "subagent_stats.killed.system": 0,
+              "subagent_stats.refused.depth_limit": 0,
+              "subagent_stats.refused.concurrency_limit": 0,
+              "subagent_stats.refused.budget": 0,
+              "safety_stops": 0,
+              "is_error": false,
+              "num_turns": 1,
+              "subtype": "success",
+              "api_error_status": null,
+              "result": "OK",
+              "ttft_ms": 3917,
+              "type": "result",
+              "duration_ms": 3945,
+              "uuid": "6759aec7-12bb-43f7-91a6-8e6ba69ecf3d",
+              "ttft_stream_ms": 3916,
+              "time_to_request_ms": 139,
+              "first_content_frame_ms": 3916,
+              "queued_turn_count": 0,
+              "result_index": 0,
+              "model_usage_since_last_result.claude-opus-5-5.inputTokens": 2,
+              "model_usage_since_last_result.claude-opus-5-5.outputTokens": 4,
+              "model_usage_since_last_result.claude-opus-5-5.cacheReadInputTokens": 14018,
+              "model_usage_since_last_result.claude-opus-5-5.cacheCreationInputTokens": 11839,
+              "model_usage_since_last_result.claude-opus-5-5.webSearchRequests": 0,
+              "model_usage_since_last_result.claude-opus-5-5.costUSD": 0.0976036,
+              "model_usage_since_last_result.claude-opus-5-5.contextWindow": 1000000,
+              "model_usage_since_last_result.claude-opus-5-5.maxOutputTokens": 128000,
+              "model_usage_since_last_result.claude-opus-5-5.thinkingTokens": 0,
+              "model_usage_since_last_result.claude-opus-5-5.canonicalModel": "claude-opus-5-5",
+              "model_usage_since_last_result.claude-opus-5-5.provider": "firstParty",
+              "model_usage_since_last_result.claude-opus-5-5.costBasis": "list"
+            }
+          }
+        ],
+        "final_seen": true,
+        "exit_code": 0,
+        "exited_by_itself": true,
+        "killed_reason": null,
+        "seconds_final_to_exit": 0.9,
+        "timed_out": false,
+        "stderr": {
+          "length": 0,
+          "lines": 0,
+          "categories": []
+        }
+      },
+      "auth_status": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": {
+          "loggedIn": true,
+          "authMethod": "claude.ai",
+          "apiProvider": "firstParty",
+          "analyticsDisabled": false,
+          "projectsDirectory": {
+            "redacted": true,
+            "length": 31
+          },
+          "configDirectory": {
+            "redacted": true,
+            "length": 22
+          },
+          "email": {
+            "redacted": true,
+            "length": 23
+          },
+          "orgId": {
+            "redacted": true,
+            "length": 36
+          },
+          "orgName": {
+            "redacted": true,
+            "length": 38
+          },
+          "subscriptionType": "pro"
+        },
+        "stderr": {
+          "length": 0,
+          "lines": 0,
+          "categories": []
+        }
+      }
+    },
+    "invalid_api_key": {
+      "run": {
+        "events": [
+          {
+            "seconds": 1.3,
+            "shape": {
+              "type": "system",
+              "subtype": "hook_started",
+              "hook_id": {
+                "redacted": true,
+                "length": 36
+              },
+              "hook_name": "SessionStart:startup",
+              "hook_event": "SessionStart",
+              "uuid": "fc8f9291-c59f-49a2-928f-c47f73ce337d",
+              "session_id": "88ff2ac4-7c8e-4d4e-b7f7-9c49365241e6"
+            }
+          },
+          {
+            "seconds": 1.6,
+            "shape": {
+              "type": "system",
+              "subtype": "hook_response",
+              "hook_id": {
+                "redacted": true,
+                "length": 36
+              },
+              "hook_name": "SessionStart:startup",
+              "hook_event": "SessionStart",
+              "output": {
+                "redacted": true,
+                "length": 3604
+              },
+              "stdout": {
+                "redacted": true,
+                "length": 3604
+              },
+              "stderr": {
+                "redacted": true,
+                "length": 0
+              },
+              "exit_code": 0,
+              "outcome": "success",
+              "uuid": "9e563b94-aa0e-4057-a66a-ebd9d4648236",
+              "session_id": "88ff2ac4-7c8e-4d4e-b7f7-9c49365241e6"
+            }
+          },
+          {
+            "seconds": 1.8,
+            "shape": {
+              "type": "system",
+              "subtype": "init",
+              "cwd": {
+                "redacted": true,
+                "length": 77
+              },
+              "session_id": "88ff2ac4-7c8e-4d4e-b7f7-9c49365241e6",
+              "tools[#]": 27,
+              "tools[0]": "Task",
+              "mcp_servers[#]": 0,
+              "model": "claude-opus-5-5",
+              "permissionMode": "auto",
+              "slash_commands[#]": 73,
+              "slash_commands[0]": "deep-research",
+              "terminal_slash_commands[#]": 4,
+              "terminal_slash_commands[0]": "doctor",
+              "apiKeySource": "ANTHROPIC_API_KEY",
+              "claude_code_version": "2.1.309",
+              "output_style": "default",
+              "agents[#]": 5,
+              "agents[0]": "claude",
+              "skills[#]": 42,
+              "skills[0]": "deep-research",
+              "plugins[#]": 4,
+              "plugins[0].name": "superpowers",
+              "plugins[0].path": {
+                "redacted": true,
+                "length": 78
+              },
+              "plugins[0].source": {
+                "redacted": true,
+                "length": 35
+              },
+              "plugins[0].version": "7.0.0",
+              "capabilities[#]": 13,
+              "capabilities[0]": "interrupt_receipt_v1",
+              "analytics_disabled": false,
+              "product_feedback_disabled": true,
+              "uuid": "2d729847-5885-464b-bea0-fd76d21fcb45",
+              "memory_paths.auto": {
+                "redacted": true,
+                "length": 117
+              },
+              "messaging_socket_path": {
+                "redacted": true,
+                "length": 54
+              },
+              "fast_mode_state": "off",
+              "fast_mode_disabled_reason": "sdk_opt_in_required",
+              "per_turn_effort_active": true,
+              "view_mode": "default",
+              "powershell_path": {
+                "redacted": true,
+                "length": 94
+              }
+            }
+          },
+          {
+            "seconds": 2.2,
+            "shape": {
+              "type": "assistant",
+              "message.diagnostics": null,
+              "message.id": {
+                "redacted": true,
+                "length": 36
+              },
+              "message.container": null,
+              "message.model": {
+                "redacted": true,
+                "length": 11
+              },
+              "message.role": "assistant",
+              "message.stop_details": null,
+              "message.stop_reason": "stop_sequence",
+              "message.stop_sequence": {
+                "redacted": true,
+                "length": 0
+              },
+              "message.type": "message",
+              "message.usage.output_tokens_details": null,
+              "message.usage.input_tokens": 0,
+              "message.usage.output_tokens": 0,
+              "message.usage.cache_creation_input_tokens": 0,
+              "message.usage.cache_read_input_tokens": 0,
+              "message.usage.server_tool_use.web_search_requests": 0,
+              "message.usage.server_tool_use.web_fetch_requests": 0,
+              "message.usage.service_tier": null,
+              "message.usage.cache_creation.ephemeral_1h_input_tokens": 0,
+              "message.usage.cache_creation.ephemeral_5m_input_tokens": 0,
+              "message.usage.inference_geo": null,
+              "message.usage.iterations": null,
+              "message.usage.speed": null,
+              "message.usage.fallback_credit": null,
+              "message.content[#]": 1,
+              "message.content[0].type": "text",
+              "message.content[0].text": {
+                "redacted": true,
+                "length": 38
+              },
+              "message.context_management": null,
+              "parent_tool_use_id": null,
+              "session_id": "88ff2ac4-7c8e-4d4e-b7f7-9c49365241e6",
+              "uuid": "7478fe1c-fe9e-4846-9771-02d5be514444",
+              "timestamp": "2026-10-23T10:38:34.6290000Z",
+              "error": "authentication_failed",
+              "request_id": "req_011CgK2NL9YXy15w9hNZevh4",
+              "is_api_error_message": true,
+              "api_error_status": 401,
+              "api_error_origin": "first_party"
+            }
+          },
+          {
+            "seconds": 2.2,
+            "shape": {
+              "duration_api_ms": 0,
+              "stop_reason": "stop_sequence",
+              "session_id": "88ff2ac4-7c8e-4d4e-b7f7-9c49365241e6",
+              "total_cost_usd": 0,
+              "usage.output_tokens_details.thinking_tokens": 0,
+              "usage.input_tokens": 0,
+              "usage.cache_creation_input_tokens": 0,
+              "usage.cache_read_input_tokens": 0,
+              "usage.output_tokens": 0,
+              "usage.server_tool_use.web_search_requests": 0,
+              "usage.server_tool_use.web_fetch_requests": 0,
+              "usage.service_tier": "standard",
+              "usage.cache_creation.ephemeral_1h_input_tokens": 0,
+              "usage.cache_creation.ephemeral_5m_input_tokens": 0,
+              "usage.inference_geo": {
+                "redacted": true,
+                "length": 0
+              },
+              "usage.iterations[#]": 0,
+              "usage.speed": "standard",
+              "usage.fallback_credit": null,
+              "permission_denials[#]": 0,
+              "terminal_reason": "api_error",
+              "fast_mode_state": "off",
+              "fast_mode_disabled_reason": "sdk_opt_in_required",
+              "subagent_stats.spawned": 0,
+              "subagent_stats.requested.background": 0,
+              "subagent_stats.requested.foreground": 0,
+              "subagent_stats.requested.unset": 0,
+              "subagent_stats.started_in_background": 0,
+              "subagent_stats.max_depth": 0,
+              "subagent_stats.spawned_by_subagents": 0,
+              "subagent_stats.completed": 0,
+              "subagent_stats.failed": 0,
+              "subagent_stats.killed.parent": 0,
+              "subagent_stats.killed.user": 0,
+              "subagent_stats.killed.system": 0,
+              "subagent_stats.refused.depth_limit": 0,
+              "subagent_stats.refused.concurrency_limit": 0,
+              "subagent_stats.refused.budget": 0,
+              "safety_stops": 0,
+              "is_error": true,
+              "num_turns": 1,
+              "subtype": "success",
+              "api_error_status": 401,
+              "api_error_origin": "first_party",
+              "result": {
+                "redacted": true,
+                "length": 38
+              },
+              "type": "result",
+              "duration_ms": 546,
+              "uuid": "1be8cb8c-3714-41ed-b2b3-1ba4b8c1bd99",
+              "queued_turn_count": 0,
+              "result_index": 0
+            }
+          }
+        ],
+        "final_seen": true,
+        "exit_code": 1,
+        "exited_by_itself": true,
+        "killed_reason": null,
+        "seconds_final_to_exit": 1.2,
+        "timed_out": false,
+        "stderr": {
+          "length": 189,
+          "lines": 1,
+          "categories": [
+            "claude.ai",
+            "api_key",
+            "organization",
+            "login"
+          ]
+        }
+      },
+      "auth_status": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": {
+          "loggedIn": true,
+          "authMethod": "api_key",
+          "apiProvider": "firstParty",
+          "analyticsDisabled": false,
+          "projectsDirectory": {
+            "redacted": true,
+            "length": 31
+          },
+          "configDirectory": {
+            "redacted": true,
+            "length": 22
+          },
+          "apiKeySource": "ANTHROPIC_API_KEY"
+        },
+        "stderr": {
+          "length": 0,
+          "lines": 0,
+          "categories": []
+        }
+      }
+    }
+  }
+}

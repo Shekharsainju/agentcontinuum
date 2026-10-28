@@ -10,10 +10,7 @@ public sealed class HookRecorderTests : IDisposable
     private const string Sentinel = "SENTINEL-h00k";
     private const string SessionId = "9704e6d4-d947-4c1a-8224-b751c4def13f";
 
-    private static readonly ClaudeRules Rules = VersionRules.LoadEmbedded().Entries[0] with
-    {
-        Limit = new LimitSignalRule("StopFailure", "error", ["rate_limit"], "resets_at", JsonLiteral.UnixSeconds),
-    };
+    private static readonly ClaudeRules Rules = VersionRules.LoadEmbedded().Entries[0] with { Limit = TestLimits.Rule };
 
     private readonly TempDirectory _dir = new();
     private readonly StateStore _store;
@@ -36,16 +33,14 @@ public sealed class HookRecorderTests : IDisposable
         """;
 
     [Fact]
-    public void Record_KeepsAllowlistedFields()
+    public void Record_KeepsNameAndSessionOnly()
     {
         HookRecorder.Record(_store, "op1", Input(Payload), Rules);
 
         var hook = Assert.Single(HookRecorder.ForOp(_store, "op1"));
         Assert.Equal("StopFailure", hook.HookName);
         Assert.Equal(SessionId, hook.SessionId);
-        Assert.Equal(
-            new Dictionary<string, string> { ["error"] = "\"rate_limit\"", ["resets_at"] = "1800000000" },
-            hook.Fields);
+        Assert.Empty(hook.Fields);
         Assert.Empty(HookRecorder.ForOp(_store, "op2"));
     }
 

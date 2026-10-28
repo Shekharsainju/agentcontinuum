@@ -5,13 +5,13 @@
 The suite in `tests/AgentContinuum.Acceptance.Tests` runs `ac-test.exe`, not the shipped `ac.exe`. `ac-test.exe` runs the same entry code as `ac.exe` with these test-only replacements:
 
 - State, profile and managed settings paths in a temp folder per test.
-- A rules file with a test-only limit signal (StopFailure, `error: "rate_limit"`, `resets_at` in Unix seconds). The shipped rules for 2.1.304 have `"limit": null` until E1's limit capture runs.
+- A rules file whose 2.1.304 entry gets the stream limit signal Claude Code 2.1.309 showed at a real limit: a `result` with `api_error: "usage_limit_reached"` and `api_error_status: 429`, and a `rate_limit_event` with `status: "rejected"`, the reset taken from its `resetsAt` in Unix seconds. FakeClaude reports 2.1.304, whose shipped entry has `"limit": null`.
 - A clock moved by an offset file, with the real monotonic clock.
 - A notifier that records the text each toast would show.
 - Crash points that end the daemon with `Process.Kill()` at each R13 point.
 - FakeClaude, under a name unique to each test, in place of Claude Code.
 
-The suite therefore does not prove limit detection on the shipped `ac.exe`, which has no limit rule yet. It proves the launch, recovery, billing, workspace and scheduling logic around a limit signal, given one.
+The suite therefore does not prove limit detection on real Claude Code. The shipped 2.1.309 entry carries the same limit signal, which unit tests check against stream lines shaped like the real capture. The suite proves the launch, recovery, billing, workspace and scheduling logic around a limit signal, given one.
 
 `ac-test.exe` refuses to run without its `ac-test.json`, found under `%LOCALAPPDATA%\AgentContinuum` and then beside the exe. It also refuses a config that names your own LOCALAPPDATA or profile folder.
 
@@ -27,12 +27,12 @@ Run on 2026-10-22, Windows 11 Home build 26300, Release build.
 | --- | --- | --- |
 | AC4 | `AC4_KillDaemonAtEachCrashPoint`: 5 crash points, 20 runs each, 3 points at a time | Pass, 1 min 43 s |
 | AC5 | `AC5_ThousandCrashCycles_NeverExceedMaxAttempts`: 1,000 cycles in 3 streams, seeds 5000 to 5002; each crash point ended a daemon at least once | Pass, 9 min 40 s. Rerun alone on 2026-10-23 from the Release build: pass, 13 min 30 s |
-| AC6 | `AC6_LimitEndsJobWithin10s`: main process and 2 children gone within 10 s of the hook row | Pass |
+| AC6 | `AC6_LimitEndsJobWithin10s`: main process and 2 children gone within 10 s of the limit row (the StopFailure hook row on 2026-10-22, the stream limit result row since) | Pass. Rerun on 2026-10-28 with the stream signal, Debug build: pass |
 | AC9 | `AC9_EachProofAloneBlocks`: P2 to P6 each alone, plus a passing control | Pass |
 | AC10 | `AC10_P5MismatchTerminates` | Pass |
 | AC13 | `AC13_NoBaselineWithActiveProcesses`: children outlive the run by 3 s and write a file | Pass |
 | AC15 | `AC15_ClockJumpOneOffer`: 2 h forward and backward | Pass |
-| I6 | `I6_SentinelsNowhere`: database, WAL, logs, launch settings and captured notifications | Pass |
+| I6 | `I6_SentinelsNowhere`: database, WAL, logs, launch settings and captured notifications | Pass. Rerun on 2026-10-28 with no hook or launch settings and a sentinel inside `rate_limit_info`, Debug build: pass |
 
 ## Fixes the suite led to
 
@@ -44,7 +44,7 @@ Each fix went in with a failing test first, in the owning task's code.
 
 ## Hand check
 
-Run on 2026-10-23 by hand, with the Release build of `ac-test.exe` in a folder of its own and `ac-test.json` beside it. State and profile were in temp folders and real toasts were on. The task ran FakeClaude, renamed `claude-handcheck.exe`, which reports 2.1.304. The rules were the shipped 2.1.304 rules with the test limit signal added, as the suite builds them.
+Run on 2026-10-23 by hand, with the Release build of `ac-test.exe` in a folder of its own and `ac-test.json` beside it. State and profile were in temp folders and real toasts were on. The task ran FakeClaude, renamed `claude-handcheck.exe`, which reports 2.1.304. The rules were the shipped 2.1.304 rules with the test limit signal added, as the suite then built them, in the StopFailure hook form used before the real limit capture.
 
 | Step | Result |
 | --- | --- |

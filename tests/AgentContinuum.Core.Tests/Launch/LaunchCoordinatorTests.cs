@@ -37,7 +37,6 @@ public sealed class LaunchCoordinatorTests : IDisposable
             new ResetScheduler(_f.Tasks, _f.Clock, _log),
             _notifier,
             _log,
-            new LaunchPaths(AcExe, _f.Outside("launch")),
             preflightHost,
             rulesFor: _ => _rules,
             delay: async d =>
@@ -165,7 +164,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
     {
         var task = _f.Task with { PermissionMode = mode };
 
-        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First, null));
+        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First));
     }
 
     [Fact]
@@ -194,7 +193,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
     [Fact]
     public async Task ErrorWhileRunning_KilledAndSettledBeforeDispose()
     {
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = null;
         _host.Run.Lines.Add(InitLine());
         _host.Run.StdoutThrows = new IOException("pipe broken");
@@ -218,7 +217,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
         var task = _f.Task with { AllowedTools = ["Read", rule] };
 
         Assert.False(LaunchPolicy.IsAllowedToolRule(rule));
-        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First, null));
+        Assert.Throws<InvalidOperationException>(() => LaunchCoordinator.BuildArgs(task, LaunchKind.First));
     }
 
     [Fact]
@@ -226,7 +225,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
     {
         var task = _f.Task with { AllowedTools = ["Read", "Bash(git diff:*,stat)"] };
 
-        var args = LaunchCoordinator.BuildArgs(task, LaunchKind.First, null);
+        var args = LaunchCoordinator.BuildArgs(task, LaunchKind.First);
 
         Assert.Equal(["--allowedTools", "Read", "Bash(git diff:*,stat)"], args[^3..]);
     }
@@ -439,27 +438,16 @@ public sealed class LaunchCoordinatorTests : IDisposable
 
     private const long ResetEpoch = 1_792_500_000;
 
-    private const string AcExe = @"C:\Program Files\AgentContinuum\ac.exe";
-
-    private static readonly LimitSignalRule Limit = new("StopFailure", "error_type", ["rate_limit"], "resets_at", "unix_seconds");
-
-    // Records the hook the way `ac hook stop-failure` would, while the launch's op is live.
-    private void FireLimitHookOnStart() => _host.OnStart = _ =>
-    {
-        var opId = _f.Ledger.Live(TaskId)!.OpId;
-        var payload = $$"""
-            {"hook_event_name":"StopFailure","session_id":"{{Session}}","error_type":"rate_limit","resets_at":{{ResetEpoch}},"message":"SENTINEL-hook"}
-            """;
-        HookRecorder.Record(_f.Store, opId, new MemoryStream(Encoding.UTF8.GetBytes(payload)), _rules);
-    };
+    private void AddLimitLines() =>
+        _host.Run.Lines.AddRange([TestLimits.RateLimitLine(Session, "rejected", ResetEpoch), TestLimits.ResultLine(Session)]);
 
     [Fact]
     public async Task UsageLimit_SchedulesReset()
     {
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = 1;
         _host.Run.Lines.Add(InitLine());
-        FireLimitHookOnStart();
+        AddLimitLines();
 
         var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
 
@@ -469,22 +457,17 @@ public sealed class LaunchCoordinatorTests : IDisposable
         Assert.Equal(ResetEpoch, task.ResetExpectedAtEpoch);
         Assert.Equal(ResetEpoch + ResetScheduler.ResetMarginSeconds, task.AttemptPermittedAtEpoch);
 
-        var settingsPath = Path.Combine(_f.Outside("launch"), report.OpId!, "settings.json");
-        var args = _host.Started.Single().Args;
-        Assert.Equal(["--settings", settingsPath], args[^2..]);
-        using var settings = JsonDocument.Parse(File.ReadAllText(settingsPath));
-        var command = settings.RootElement.GetProperty("hooks").GetProperty("StopFailure")[0].GetProperty("hooks")[0];
-        Assert.Equal("command", command.GetProperty("type").GetString());
-        Assert.Equal($"\"{AcExe}\" hook stop-failure --op {report.OpId}", command.GetProperty("command").GetString());
+        Assert.DoesNotContain("--settings", _host.Started.Single().Args);
+        Assert.Equal(0, _host.Run.Kills);
     }
 
     [Fact]
     public async Task VerifiedLimit_StillAlive10s_Terminated()
     {
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = null;
         _host.Run.Lines.Add(InitLine());
-        FireLimitHookOnStart();
+        AddLimitLines();
 
         var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -518,11 +501,11 @@ public sealed class LaunchCoordinatorTests : IDisposable
     [Fact]
     public async Task Baseline_JobNeverEmpties_TerminatedAndNeedsAttention()
     {
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = 1;
         _host.Run.Lines.Add(InitLine());
         _host.Run.Active = () => 1;
-        FireLimitHookOnStart();
+        AddLimitLines();
 
         var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false).WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -571,10 +554,10 @@ public sealed class LaunchCoordinatorTests : IDisposable
     public async Task AttemptsExhausted_NeedsAttention()
     {
         _f.Task = _f.Task with { MaxAttempts = 1 };
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = 1;
         _host.Run.Lines.Add(InitLine());
-        FireLimitHookOnStart();
+        AddLimitLines();
 
         var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
 
@@ -591,7 +574,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
     public async Task NoContentInDbOrLog()
     {
         _f.Task = _f.Task with { MaxAttempts = 1 };
-        _rules = _rules! with { Limit = Limit };
+        _rules = _rules! with { Limit = TestLimits.Rule };
         _host.Run.ExitCode = 1;
         _host.Run.Lines.AddRange(
         [
@@ -600,7 +583,7 @@ public sealed class LaunchCoordinatorTests : IDisposable
             $$"""{"type":"result","session_id":"{{Session}}","is_error":true,"result":"SENTINEL-stream"}""",
             "SENTINEL-stream not json",
         ]);
-        FireLimitHookOnStart();
+        AddLimitLines();
 
         var report = await Coordinator().Launch(TaskId, LaunchKind.First, now: false);
         Assert.True(report.Launched);
@@ -609,7 +592,6 @@ public sealed class LaunchCoordinatorTests : IDisposable
 
         var dbDir = Path.GetDirectoryName(_f.Store.Connection.DataSource)!;
         var written = Directory.GetFiles(dbDir, "ac.db*").Select(ReadShared)
-            .Concat(Directory.GetFiles(_f.Outside("launch"), "*", SearchOption.AllDirectories).Select(ReadShared))
             .Concat(_log.Messages)
             .Concat(_notifier.Attentions.Select(a => $"{a.TaskId} {a.Label} {a.ReasonCode}"));
         Assert.All(written, text => Assert.DoesNotContain("SENTINEL", text));

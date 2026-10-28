@@ -64,57 +64,66 @@ public sealed class RunClassifierTests
         Assert.Equal(Outcome.Failed, result.Outcome);
     }
 
-    private static readonly ClaudeRules LimitRules = Rules with
-    {
-        Limit = new LimitSignalRule("StopFailure", "error", ["rate_limit"], "resets_at", JsonLiteral.UnixSeconds),
-    };
+    private static readonly ClaudeRules LimitRules = Rules with { Limit = TestLimits.Rule };
 
-    private static HookEvent Hook(string name, Guid session, string reason, long? resetsAt = null)
+    private static FilteredEvent LimitResult(Guid? session = null, string apiError = "usage_limit_reached", int status = 429) =>
+        new("result", "success", (session ?? Session).ToString(), true, null, new Dictionary<string, string>
+        {
+            ["is_error"] = "true",
+            ["terminal_reason"] = "\"api_error\"",
+            ["api_error"] = $"\"{apiError}\"",
+            ["api_error_status"] = status.ToString(),
+        });
+
+    private static FilteredEvent RateLimit(string status, long? resetsAt = null, Guid? session = null)
     {
-        var fields = new Dictionary<string, string> { ["error"] = $"\"{reason}\"" };
+        var fields = new Dictionary<string, string> { ["rate_limit_info.status"] = $"\"{status}\"" };
         if (resetsAt is { } reset)
         {
-            fields["resets_at"] = reset.ToString();
+            fields["rate_limit_info.resetsAt"] = reset.ToString();
         }
-        return new HookEvent(name, session.ToString(), fields);
+        return new FilteredEvent("rate_limit_event", null, (session ?? Session).ToString(), null, null, fields);
     }
-
-    private static FilteredEvent Usage(long resetsAt) =>
-        new("rate_limit_event", null, Session.ToString(), null, null, new Dictionary<string, string>
-        {
-            ["rate_limit_info.resetsAt"] = resetsAt.ToString(),
-        });
 
     [Fact]
     public void VerifiedLimit_UsageLimitWithResetEpoch()
     {
         var result = RunClassifier.Classify(
-            LimitRules,
-            Session,
-            [Init(), Usage(1_700_000_000), Result(true, "api_error")],
-            [Hook("StopFailure", Session, "rate_limit", resetsAt: 1_800_000_000)],
-            1);
+            LimitRules, Session, [Init(), RateLimit("rejected", 1_800_000_000), LimitResult()], NoHooks, 1);
 
         Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
     }
 
     [Fact]
-    public void VerifiedLimitWithoutHookReset_ResetFromLastUsageEvent()
+    public void VerifiedLimit_ResetFromLastRateLimitEvent()
     {
         var result = RunClassifier.Classify(
             LimitRules,
             Session,
-            [Init(), Usage(1_700_000_000), Usage(1_800_000_000)],
-            [Hook("StopFailure", Session, "rate_limit")],
+            [Init(), RateLimit("allowed", 1_700_000_000), RateLimit("rejected", 1_800_000_000), LimitResult()],
+            NoHooks,
             1);
 
         Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
     }
 
     [Fact]
-    public void VerifiedLimitWithoutAnyReset_NullEpoch()
+    public void VerifiedLimit_ResetFromRejectedEventOverLaterAllowedOne()
     {
-        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Session, "rate_limit")], 0);
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Init(), RateLimit("rejected", 1_800_000_000), RateLimit("allowed", 1_700_000_000), LimitResult()],
+            NoHooks,
+            1);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
+    }
+
+    [Fact]
+    public void VerifiedLimitWithoutReset_NullEpoch()
+    {
+        var result = RunClassifier.Classify(LimitRules, Session, [Init(), RateLimit("rejected"), LimitResult()], NoHooks, 1);
 
         Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", null), result);
     }
@@ -122,27 +131,54 @@ public sealed class RunClassifierTests
     private static readonly Classification Ambiguous = new(Outcome.Ambiguous, "Stopped, reason unverified", null);
 
     [Fact]
+    public void LimitResultWithoutRejectedRateLimit_Ambiguous()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules, Session, [Init(), RateLimit("allowed", 1_800_000_000), LimitResult()], NoHooks, 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
+
+    [Fact]
+    public void RejectedRateLimitWithoutLimitResult_Ambiguous()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules, Session, [Init(), RateLimit("rejected", 1_800_000_000), Result(true, "api_error")], NoHooks, 1);
+
+        Assert.Equal(Ambiguous, result);
+    }
+
+    [Fact]
     public void LimitWithWrongSessionId_Ambiguous()
     {
-        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Guid.NewGuid(), "rate_limit", 1_800_000_000)], 1);
+        var other = Guid.NewGuid();
+
+        var result = RunClassifier.Classify(
+            LimitRules, Session, [Init(), RateLimit("rejected", 1_800_000_000, other), LimitResult(other)], NoHooks, 1);
 
         Assert.Equal(Ambiguous, result);
     }
 
     [Fact]
-    public void LimitWithNoRule_Ambiguous()
+    public void OtherApiError_Failed()
     {
-        var result = RunClassifier.Classify(Rules, Session, [Init()], [Hook("StopFailure", Session, "rate_limit", 1_800_000_000)], 1);
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Init(), RateLimit("allowed", 1_800_000_000), LimitResult(apiError: "overloaded_error", status: 529)],
+            NoHooks,
+            1);
 
-        Assert.Equal(Ambiguous, result);
+        Assert.Equal(new Classification(Outcome.Failed, "Run failed", null), result);
     }
 
     [Fact]
-    public void LimitWithOtherReason_Ambiguous()
+    public void LimitWithNoRule_Failed()
     {
-        var result = RunClassifier.Classify(LimitRules, Session, [Init()], [Hook("StopFailure", Session, "server_error")], 1);
+        var result = RunClassifier.Classify(
+            Rules, Session, [Init(), RateLimit("rejected", 1_800_000_000), LimitResult()], NoHooks, 1);
 
-        Assert.Equal(Ambiguous, result);
+        Assert.Equal(new Classification(Outcome.Failed, "Run failed", null), result);
     }
 
     [Fact]
@@ -169,11 +205,7 @@ public sealed class RunClassifierTests
     public void OutputBeforeInit_BillingMismatchOverridesLimit()
     {
         var result = RunClassifier.Classify(
-            LimitRules,
-            Session,
-            [Result(true, "api_error"), Init()],
-            [Hook("StopFailure", Session, "rate_limit", 1_800_000_000)],
-            1);
+            LimitRules, Session, [LimitResult(), RateLimit("rejected", 1_800_000_000), Init()], NoHooks, 1);
 
         Assert.Equal(Outcome.BillingMismatch, result.Outcome);
     }

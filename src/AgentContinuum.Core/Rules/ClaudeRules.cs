@@ -28,4 +28,10 @@ public sealed record UsageRule(string Type, string ResetField, string ResetForma
 
 public sealed record OverageRule(string StatusField, string InUseField, JsonElement[] SafeInUse);
 
-public sealed record LimitSignalRule(string Hook, string ReasonField, string[] ReasonValues, string? ResetField, string? ResetFormat);
+/// <summary>
+/// Verified only when every event rule matches an event of the run's own session. The reset is read from the last
+/// <see cref="ResetType"/> event that matches its event rule, or failing that from the last one with a reset.
+/// </summary>
+public sealed record LimitSignalRule(LimitEventRule[] Events, string ResetType, string ResetField, string ResetFormat);
+
+public sealed record LimitEventRule(string Type, FieldRequirement[] When);
