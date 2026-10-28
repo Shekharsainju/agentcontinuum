@@ -93,6 +93,25 @@
         "safeInUse": [false]
       }
     },
-    "limit": null
+    "limit": {
+      "events": [
+        {
+          "type": "result",
+          "when": [
+            { "path": "api_error", "values": ["usage_limit_reached"] },
+            { "path": "api_error_status", "values": [429] }
+          ]
+        },
+        {
+          "type": "rate_limit_event",
+          "when": [
+            { "path": "rate_limit_info.status", "values": ["rejected"] }
+          ]
+        }
+      ],
+      "resetType": "rate_limit_event",
+      "resetField": "rate_limit_info.resetsAt",
+      "resetFormat": "unix_seconds"
+    }
   }
 ]

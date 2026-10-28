@@ -33,4 +33,4 @@ If the version on the first line is not 2.1.309, still paste it. That version ne
 
 ## What happens next
 
-The summary shows which hook fired (expected: `StopFailure`), its reason value, the reset field and its format, and whether Claude Code exited on its own. From that, the limit signal is added to the 2.1.309 entry in `src/AgentContinuum.Core/Rules/claude-code.json`, failing test first. Until then, `ac.exe` treats every limit-like stop as unverified.
+The summary shows which hook fired, its reason value, the reset field and its format, and whether Claude Code exited on its own. The capture on 2026-10-23 showed that no StopFailure hook fires at a real limit and that the signal is in the stream instead. The 2.1.309 entry in `src/AgentContinuum.Core/Rules/claude-code.json` now reads it from there. See `docs/e1-findings.md`.

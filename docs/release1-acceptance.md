@@ -11,7 +11,7 @@ The suite in `tests/AgentContinuum.Acceptance.Tests` runs `ac-test.exe`, not the
 - Crash points that end the daemon with `Process.Kill()` at each R13 point.
 - FakeClaude, under a name unique to each test, in place of Claude Code.
 
-The suite therefore does not prove limit detection on the shipped `ac.exe`, which has no limit rule yet. It proves the launch, recovery, billing, workspace and scheduling logic around a limit signal, given one.
+The suite therefore does not prove limit detection on real Claude Code. The shipped 2.1.309 entry carries the same limit signal, which unit tests check against stream lines shaped like the real capture. The suite proves the launch, recovery, billing, workspace and scheduling logic around a limit signal, given one.
 
 `ac-test.exe` refuses to run without its `ac-test.json`, found under `%LOCALAPPDATA%\AgentContinuum` and then beside the exe. It also refuses a config that names your own LOCALAPPDATA or profile folder.
 

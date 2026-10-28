@@ -6,7 +6,7 @@ Oct 20, 2026
 
 Claude Code 2.1.304 reports enough to verify a subscription route without reading any secret. `claude auth status` and the stream's `system/init` event both tell a claude.ai login apart from an API key. In the negative control, an invalid key changed both. The stream's `rate_limit_event` gives the reset time, window utilisation and live overage status, and it carries no tool content.
 
-Two questions are still pending until the limit capture runs near a real limit: whether a StopFailure hook fires at a usage-limit stop and with which fields, and whether the headless process exits on its own at the limit (I5). Until then, Release 1 cannot verify a limit signal and treats every limit-like stop as AMBIGUOUS.
+The limit capture on 2.1.309 (Oct 23, 2026) settled the two open questions. No StopFailure hook fires at a real usage limit. The limit is signalled in the stream, and the headless process exits on its own (I5). Release 1 verifies a limit on 2.1.309 from the stream and treats every limit-like stop on 2.1.304 as AMBIGUOUS. See the 2.1.309 section.
 
 ## Environment
 
@@ -26,8 +26,8 @@ Two questions are still pending until the limit capture runs near a real limit: 
 | R4 reset time | Confirmed for a run that is not at the limit. `rate_limit_info.resetsAt` is a Unix epoch in seconds, with per-window `unifiedWindows.five_hour` and `seven_day` `resetsAt` and `utilization`. Whether the same event appears at a limit stop is pending. | init |
 | Usage source with no tool content | Exists. `rate_limit_event` holds only status, window, reset, utilisation and overage fields. | init |
 | Process exits after the result | Yes for a normal and an error run: 0.8 s and 1.1 s after the result event. At the limit: pending. | init |
-| StopFailure at a limit stop | Pending | limit capture |
-| Headless process exits at the limit (I5) | Pending | limit capture |
+| StopFailure at a limit stop | Does not fire on 2.1.309. Only SessionEnd fired, with `reason: "other"`. The limit is in the stream | limit-2.1.309 |
+| Headless process exits at the limit (I5) | Yes on 2.1.309, exit code 1, 2.7 s after the result event | limit-2.1.309 |
 
 ## Facts the build must respect
 
@@ -49,7 +49,7 @@ Two questions are still pending until the limit capture runs near a real limit: 
 | P6 | Attestation as specified. The live overage fields are recorded in the rules for a later live check |
 | Run success | Rule entry filled (`is_error` false and `terminal_reason` completed) |
 | Reset time | Rule entry filled from `rate_limit_event` |
-| Limit signal | Empty until the limit capture. Every limit-like stop is AMBIGUOUS |
+| Limit signal | Empty on 2.1.304, where every limit-like stop is AMBIGUOUS. Filled on 2.1.309 from the stream |
 
 The rules entry is `src/AgentContinuum.Core/Rules/claude-code.json`.
 
@@ -59,4 +59,23 @@ Oct 23, 2026. The static and init captures were rerun on 2.1.309, at the same pa
 
 Every field the rules read matches 2.1.304. That covers the auth status output for both runs, `apiKeySource` on `system/init`, the `rate_limit_event` fields, the result fields for both runs, the settings key names and the Credential Manager facts. The only differences are values that change from run to run (timestamps, utilisation, IDs) and one new credential key, `claudeAiOauth.subscriptionTypeSource`, which the rules do not read.
 
-2.1.309 has its own rules entry, `>=2.1.309 <2.1.310`, with the 2.1.304 fields. Versions 2.1.305 to 2.1.308 were not captured and stay outside every range. The limit signal is empty, as on 2.1.304.
+2.1.309 has its own rules entry, `>=2.1.309 <2.1.310`, with the 2.1.304 fields. Versions 2.1.305 to 2.1.308 were not captured and stay outside every range. The limit signal comes from the real limit capture below.
+
+### Real usage limit
+
+Oct 23, 2026. One tiny headless run at a natural five-hour limit on 2.1.309, with overage off and a fixed `--session-id`. Evidence: `probes/e1/results/limit-2.1.309.json`. It records key names, event types and enumerated values only. Text, paths and hook output are redacted to their lengths.
+
+| Question | Answer |
+| --- | --- |
+| Limit marker | The `result` event has `is_error: true`, `terminal_reason: "api_error"`, `api_error: "usage_limit_reached"` and `api_error_status: 429`. `subtype` is still `"success"`. The `assistant` event before it carries the same `api_error` fields with `error: "rate_limit"`. |
+| Rate limit state | A `rate_limit_event` comes before the result with `rate_limit_info.status: "rejected"`, `rateLimitType: "five_hour"`, `unifiedWindows.five_hour.utilization: 1` and `overageStatus: "rejected"`. |
+| Reset time | `rate_limit_info.resetsAt` and `unifiedWindows.five_hour.resetsAt`, both Unix seconds (1792769400). The result event has no reset field. |
+| Session ID | Every stream event and the SessionEnd hook carry the session ID given with `--session-id`. |
+| Hooks | StopFailure, Stop and SessionEnd were registered. Only SessionEnd fired, with `reason: "other"`, which carries no limit or reset information and is not specific to a limit. |
+| Process exit | On its own, exit code 1, 2.7 s after the result event. |
+
+The limit is keyed on the stream, not on a hook. A hook-keyed rule could only use SessionEnd, and `reason: "other"` would read ordinary stops as limits. The 2.1.309 limit signal is verified only when both stream events match in the run's own session: the `result` with `api_error` `usage_limit_reached` and `api_error_status` 429, and a `rate_limit_event` with `status` `rejected`. The reset comes from the last rejected `rate_limit_event`'s `resetsAt`, in Unix seconds. A stop that matches only one of the two is AMBIGUOUS.
+
+Launches no longer install a StopFailure hook or a settings file. Since the process exited on its own, the 10 s limit kill is a backstop for a run that does not and for any child left in the job.
+
+Not yet captured: a limit on a resumed run (`--resume`). Matching assumes the resumed run reports the same session ID. If it reported another, the stop would be AMBIGUOUS, which is safe but unverified. The seven-day window at its limit was not seen either; this capture hit the five-hour window.
