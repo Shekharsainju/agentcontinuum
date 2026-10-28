@@ -1,4 +1,3 @@
-using System.Text;
 using AgentContinuum.Core.Classify;
 using AgentContinuum.Core.Events;
 using AgentContinuum.Core.Model;
@@ -155,15 +154,16 @@ public sealed class RecoveryServiceTests : IDisposable
     }
 
     [Fact]
-    public void Exited_VerifiedLimitHook_HandsResetToScheduler()
+    public void Exited_VerifiedLimit_HandsResetToScheduler()
     {
-        var rules = VersionRules.LoadEmbedded().Entries[0] with
-        {
-            Limit = new LimitSignalRule("StopFailure", "error", ["rate_limit"], "resets_at", JsonLiteral.UnixSeconds),
-        };
+        var rules = VersionRules.LoadEmbedded().Entries[0] with { Limit = TestLimits.Rule };
         var opId = ExitedOp(1);
-        var payload = $$"""{"hook_event_name":"StopFailure","session_id":"{{_task.SessionId}}","error":"rate_limit","resets_at":1800000000}""";
-        HookRecorder.Record(_store, opId, new MemoryStream(Encoding.UTF8.GetBytes(payload)), rules);
+        var session = _task.SessionId.ToString("D");
+        var filter = new EventFilter(rules);
+        foreach (var line in new[] { TestLimits.RateLimitLine(session, "rejected", 1_800_000_000), TestLimits.ResultLine(session) })
+        {
+            StreamEventLog.Append(_store, opId, filter.Accept(line)!);
+        }
         var service = new RecoveryService(_store, _ledger, _tasks, _lister, new OutcomeApplier(_tasks, _usageLimits), _ => rules);
 
         service.Reconcile();

@@ -4,12 +4,11 @@ using AgentContinuum.Cli;
 
 namespace AgentContinuum.Acceptance.Tests;
 
-/// <summary>I6: sentinels in the prompt, the stream and the hook payload appear nowhere in the database, logs or notifications.</summary>
+/// <summary>I6: sentinels in the prompt and the stream appear nowhere in the database, logs or notifications.</summary>
 public sealed class I6SentinelTests : IDisposable
 {
     private const string PromptSentinel = "SENTINEL-PROMPT-7f3a";
     private const string StreamSentinel = "SENTINEL-STREAM-7f3a";
-    private const string HookSentinel = "SENTINEL-HOOK-7f3a";
 
     private readonly AcceptanceRoot _root = new();
 
@@ -28,8 +27,7 @@ public sealed class I6SentinelTests : IDisposable
         });
         events[^1]!["result"] = StreamSentinel;
         events[^1]!["sentinel_extra"] = StreamSentinel;
-        scenario["hook"]!["payload"]!["last_assistant_message"] = HookSentinel;
-        scenario["hook"]!["payload"]!["sentinel_extra"] = HookSentinel;
+        events[^2]!["rate_limit_info"]!["sentinel_extra"] = StreamSentinel;
         var worktree = _root.Worktree(scenario, $"Fix the bug. {PromptSentinel}");
         var taskId = _root.AddTask(worktree);
         _root.StartDaemon();
@@ -48,7 +46,7 @@ public sealed class I6SentinelTests : IDisposable
         foreach (var file in files)
         {
             var bytes = ReadShared(file);
-            foreach (var sentinel in new[] { PromptSentinel, StreamSentinel, HookSentinel })
+            foreach (var sentinel in new[] { PromptSentinel, StreamSentinel })
             {
                 Assert.False(Contains(bytes, Encoding.UTF8.GetBytes(sentinel)), $"{sentinel} in {file}");
                 Assert.False(Contains(bytes, Encoding.Unicode.GetBytes(sentinel)), $"{sentinel} as UTF-16 in {file}");

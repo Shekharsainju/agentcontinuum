@@ -25,26 +25,25 @@ public sealed class AC6LimitKillTests : IDisposable
         var reply = _root.Reply(_root.Submit(RequestKinds.Start, taskId), TimeSpan.FromSeconds(60))!;
         Assert.True(reply["launched"]!.GetValue<bool>(), reply.ToJsonString());
         var opId = reply["op"]!.GetValue<string>();
-        AcceptanceRoot.Eventually(() => HookRecorded(opId), TimeSpan.FromSeconds(30), "the limit hook");
-        var sinceHook = Stopwatch.StartNew();
+        AcceptanceRoot.Eventually(() => LimitResultRecorded(opId), TimeSpan.FromSeconds(30), "the limit result");
+        var sinceSignal = Stopwatch.StartNew();
 
         int[] pids = [_root.Ops(taskId).Single().Pid!.Value, .. ChildPids(worktree)];
         AcceptanceRoot.Eventually(() => pids.All(AcceptanceRoot.Gone), TimeSpan.FromSeconds(20), "the end of every process");
 
         Assert.Equal(3, pids.Length);
-        Assert.True(sinceHook.Elapsed <= TimeSpan.FromSeconds(10), $"took {sinceHook.Elapsed.TotalSeconds:0.0} s");
+        Assert.True(sinceSignal.Elapsed <= TimeSpan.FromSeconds(10), $"took {sinceSignal.Elapsed.TotalSeconds:0.0} s");
         AcceptanceRoot.Eventually(
             () => _root.Task(taskId).State == TaskState.WaitingForReset, TimeSpan.FromSeconds(30), "the wait for the reset");
         Assert.Equal(resetsAt, _root.Task(taskId).ResetExpectedAtEpoch);
     }
 
-    private bool HookRecorded(string opId)
+    private bool LimitResultRecorded(string opId)
     {
         using var store = StateStore.Open(_root.Database);
-        return HookRecorder.ForOp(store, opId).Any(h => h.HookName == AcceptanceRoot.LimitHook);
+        return StreamEventLog.ForOp(store, opId).Any(e => e.Type == "result");
     }
 
     private static int[] ChildPids(Core.Tests.GitRepo worktree) =>
         JsonSerializer.Deserialize<int[]>(File.ReadAllText(worktree.File("fake-claude-children.json")))!;
 }
-

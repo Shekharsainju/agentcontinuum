@@ -16,11 +16,6 @@ namespace AgentContinuum.Acceptance.Tests;
 /// </summary>
 public sealed class AcceptanceRoot : IDisposable
 {
-    public const string LimitHook = "StopFailure";
-    public const string LimitReasonField = "error";
-    public const string LimitReason = "rate_limit";
-    public const string LimitResetField = "resets_at";
-
     private readonly TempDirectory _dir = new();
     private readonly List<Process> _daemons = [];
     private TestHostConfig _config;
@@ -237,15 +232,17 @@ public sealed class AcceptanceRoot : IDisposable
     public static JsonObject LimitScenario(long resetsAtEpoch, int lingerSeconds = 0, int spawnChildren = 0) => new()
     {
         ["authSource"] = "none",
-        ["events"] = new JsonArray(new JsonObject
-        {
-            ["type"] = "result", ["subtype"] = "success", ["is_error"] = true, ["terminal_reason"] = "prompt_too_long",
-        }),
-        ["hook"] = new JsonObject
-        {
-            ["name"] = LimitHook,
-            ["payload"] = new JsonObject { [LimitReasonField] = LimitReason, [LimitResetField] = resetsAtEpoch },
-        },
+        ["events"] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "rate_limit_event",
+                ["rate_limit_info"] = new JsonObject { ["status"] = "rejected", ["resetsAt"] = resetsAtEpoch, ["rateLimitType"] = "five_hour" },
+            },
+            new JsonObject
+            {
+                ["type"] = "result", ["subtype"] = "success", ["is_error"] = true, ["terminal_reason"] = "api_error",
+                ["api_error_status"] = 429, ["api_error"] = "usage_limit_reached",
+            }),
         ["lingerSeconds"] = lingerSeconds,
         ["spawnChildren"] = spawnChildren,
         ["exitCode"] = 1,
@@ -295,19 +292,12 @@ public sealed class AcceptanceRoot : IDisposable
         }
     }
 
-    // The shipped rules have no limit signal until E1's capture runs, so the tests add one of their own.
+    // FakeClaude reports 2.1.304, whose shipped entry has no limit signal, so its entry gets the one 2.1.309 showed.
     private void WriteRules()
     {
         using var stream = typeof(Core.Rules.VersionRules).Assembly.GetManifestResourceStream("AgentContinuum.Core.Rules.claude-code.json")!;
         var rules = JsonNode.Parse(stream)!.AsArray();
-        rules[0]!["limit"] = new JsonObject
-        {
-            ["hook"] = LimitHook,
-            ["reasonField"] = LimitReasonField,
-            ["reasonValues"] = new JsonArray(LimitReason),
-            ["resetField"] = LimitResetField,
-            ["resetFormat"] = "unix_seconds",
-        };
+        rules[0]!["limit"] = JsonSerializer.SerializeToNode(TestLimits.Rule, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         File.WriteAllText(RulesFile, rules.ToJsonString());
     }
 }
