@@ -31,14 +31,15 @@ public static class RunClassifier
             return new Classification(Outcome.Completed, CompletedReason, null);
         }
 
-        if (rules?.Limit is { } limitRule && hooks.LastOrDefault(h => IsVerifiedLimit(limitRule, sessionId, h)) is { } limit)
+        if (rules?.Limit is { } limitRule && IsVerifiedLimit(limitRule, sessionId, stream))
         {
-            return new Classification(Outcome.UsageLimit, UsageLimitReason, ResetEpoch(rules, limitRule, limit, stream));
+            return new Classification(Outcome.UsageLimit, UsageLimitReason, ResetEpoch(limitRule, sessionId, stream));
         }
 
-        // With no rules nothing about the run can be verified. A hook only fires on a stop, so one the limit rule
-        // did not confirm is unverified, not a plain failure.
-        if (rules is null || hooks.Count > 0)
+        // With no rules nothing about the run can be verified. Launches no longer install a hook, but an op started
+        // by an earlier build may have recorded one, and a hook only fired on a stop. A stop that matches part of the
+        // limit rule looks like a limit. Either is unverified rather than a plain failure.
+        if (rules is null || hooks.Count > 0 || (rules.Limit is { } partial && IsLimitLike(partial, stream)))
         {
             return new Classification(Outcome.Ambiguous, AmbiguousReason, null);
         }
@@ -55,25 +56,31 @@ public static class RunClassifier
             && rule.SuccessWhen.All(r => JsonLiteral.MatchesAny(result.LimitFields.GetValueOrDefault(r.Path), r.Values));
     }
 
-    public static bool IsVerifiedLimit(LimitSignalRule rule, Guid sessionId, HookEvent hook) =>
-        hook.HookName == rule.Hook
-        && Guid.TryParse(hook.SessionId, out var hookSession)
-        && hookSession == sessionId
-        && rule.ReasonValues.Contains(JsonLiteral.AsString(hook.Fields.GetValueOrDefault(rule.ReasonField)));
+    public static bool IsVerifiedLimit(LimitSignalRule rule, Guid sessionId, IReadOnlyList<FilteredEvent> stream) =>
+        rule.Events.Length > 0
+        && rule.Events.All(r => stream.Any(e => IsOwnSession(e, sessionId) && Matches(r, e)));
 
-    private static long? ResetEpoch(ClaudeRules rules, LimitSignalRule limitRule, HookEvent limit, IReadOnlyList<FilteredEvent> stream)
+    private static bool IsLimitLike(LimitSignalRule rule, IReadOnlyList<FilteredEvent> stream) =>
+        rule.Events.Any(r => stream.Any(e => Matches(r, e)));
+
+    private static bool Matches(LimitEventRule rule, FilteredEvent e) =>
+        e.Type == rule.Type
+        && rule.When.Length > 0
+        && rule.When.All(r => JsonLiteral.MatchesAny(e.LimitFields.GetValueOrDefault(r.Path), r.Values));
+
+    private static bool IsOwnSession(FilteredEvent e, Guid sessionId) =>
+        Guid.TryParse(e.SessionId, out var session) && session == sessionId;
+
+    // A later event for another window can carry an earlier reset, and resuming at it would hit the limit again.
+    private static long? ResetEpoch(LimitSignalRule rule, Guid sessionId, IReadOnlyList<FilteredEvent> stream)
     {
-        if (limitRule.ResetField is { } resetField
-            && JsonLiteral.AsEpoch(limit.Fields.GetValueOrDefault(resetField), limitRule.ResetFormat) is { } fromHook)
-        {
-            return fromHook;
-        }
-
-        if (rules.Usage is { } usageRule && stream.LastOrDefault(e => e.Type == usageRule.Type) is { } usage)
-        {
-            return JsonLiteral.AsEpoch(usage.LimitFields.GetValueOrDefault(usageRule.ResetField), usageRule.ResetFormat);
-        }
-
-        return null;
+        var candidates = stream.Where(e => e.Type == rule.ResetType && IsOwnSession(e, sessionId)).ToList();
+        var limiting = candidates.Where(e => rule.Events.Any(r => r.Type == rule.ResetType && Matches(r, e)));
+        return LastEpoch(rule, limiting) ?? LastEpoch(rule, candidates);
     }
+
+    private static long? LastEpoch(LimitSignalRule rule, IEnumerable<FilteredEvent> events) =>
+        events
+            .Select(e => JsonLiteral.AsEpoch(e.LimitFields.GetValueOrDefault(rule.ResetField), rule.ResetFormat))
+            .LastOrDefault(epoch => epoch is not null);
 }

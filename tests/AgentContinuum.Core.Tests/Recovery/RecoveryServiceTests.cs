@@ -160,6 +160,7 @@ public sealed class RecoveryServiceTests : IDisposable
         var opId = ExitedOp(1);
         var session = _task.SessionId.ToString("D");
         var filter = new EventFilter(rules);
+        StreamEventLog.Append(_store, opId, Event("system", "init", [], "none"));
         foreach (var line in new[] { TestLimits.RateLimitLine(session, "rejected", 1_800_000_000), TestLimits.ResultLine(session) })
         {
             StreamEventLog.Append(_store, opId, filter.Accept(line)!);

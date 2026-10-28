@@ -108,6 +108,19 @@ public sealed class RunClassifierTests
     }
 
     [Fact]
+    public void VerifiedLimit_ResetFromRejectedEventOverLaterAllowedOne()
+    {
+        var result = RunClassifier.Classify(
+            LimitRules,
+            Session,
+            [Init(), RateLimit("rejected", 1_800_000_000), RateLimit("allowed", 1_700_000_000), LimitResult()],
+            NoHooks,
+            1);
+
+        Assert.Equal(new Classification(Outcome.UsageLimit, "Usage limit", 1_800_000_000), result);
+    }
+
+    [Fact]
     public void VerifiedLimitWithoutReset_NullEpoch()
     {
         var result = RunClassifier.Classify(LimitRules, Session, [Init(), RateLimit("rejected"), LimitResult()], NoHooks, 1);

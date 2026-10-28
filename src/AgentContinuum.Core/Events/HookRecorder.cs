@@ -20,7 +20,7 @@ public static class HookRecorder
     {
         try
         {
-            RecordOrThrow(store, opId, stdin, rules);
+            RecordOrThrow(store, opId, stdin);
         }
         catch (Exception)
         {
@@ -34,10 +34,10 @@ public static class HookRecorder
         }
     }
 
-    private static void RecordOrThrow(StateStore store, string opId, Stream stdin, ClaudeRules? rules)
+    private static void RecordOrThrow(StateStore store, string opId, Stream stdin)
     {
         var input = ReadBounded(stdin);
-        var kept = input is null ? null : new JsonAllowlist(AllowedPaths(rules), EventFilter.MaxValueChars).Read(input);
+        var kept = input is null ? null : new JsonAllowlist(AllowedPaths, EventFilter.MaxValueChars).Read(input);
         if (kept is null)
         {
             Insert(store, opId, HookErrorKind, "{}");
@@ -98,19 +98,8 @@ public static class HookRecorder
         return total > MaxInputBytes ? null : buffer[..total];
     }
 
-    private static IEnumerable<string> AllowedPaths(ClaudeRules? rules)
-    {
-        yield return HookNameField;
-        yield return SessionIdField;
-        if (rules?.Limit is { } limit)
-        {
-            yield return limit.ReasonField;
-            if (limit.ResetField is { } resetField)
-            {
-                yield return resetField;
-            }
-        }
-    }
+    // The limit signal is read from the stream, so a hook payload keeps nothing beyond who sent it.
+    private static readonly string[] AllowedPaths = [HookNameField, SessionIdField];
 
     private static string? StringField(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
